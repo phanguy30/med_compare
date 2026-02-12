@@ -68,10 +68,4 @@ The app uses structured ingredient relationships to compute similarity and visua
 
 The following sketch illustrates the planned layout and interaction flow of the dashboard:
 
-![](assets/drug_dashboard_sketch.png){width="1000"}
-
-------------------------------------------------------------------------
-
-## One-Sentence Summary
-
-An interactive dashboard that uses RxNorm to clarify drug identity, visualize formulation similarity, and reduce brand-based confusion through structured comparison tools.
+![](assets/drug_dashboard_sketch.png)
