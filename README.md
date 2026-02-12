@@ -1,41 +1,77 @@
-Interactive Drug Identity & Comparison Dashboard
-High-Level App Description
+# Interactive Drug Identity & Comparison Dashboard
 
-This interactive dashboard helps users understand whether two drug products are truly different or simply marketed differently. The app is designed for identity clarification and formulation comparison, not medical advice.
+## Overview
 
-The interface begins with a search bar where users can enter a brand name, generic name, or active ingredient. The system normalizes the input to a standardized drug identity and retrieves its active ingredients.
+This project builds an interactive dashboard designed to clarify drug identity and compare formulations using standardized terminology from RxNorm. The goal of the app is not to provide medical advice, but to help users understand whether different drug products are truly distinct or simply marketed under different names.
 
-After searching, the interface displays three coordinated panels:
+Consumers frequently encounter multiple brand names for the same active ingredient, combination products that appear unique but share similar components, and confusion surrounding generic versus brand-name equivalence. This dashboard addresses the question:
 
-Panel A — Drug Information Panel
-This panel summarizes the selected drug, including its brand and generic names, active ingredients, pharmacologic class, and formulation type (single vs. combination). A toggle allows users to view a naming hierarchy that visually maps Ingredient → Generic → Brand relationships.
+> “Are these drugs actually different, or simply marketed differently?”
 
-Panel B — Similarity Cluster View
-A 2D similarity map displays related drug formulations based on ingredient composition. The searched drug is highlighted, and nearby drugs can be selected for comparison. This supports exploratory discovery.
+The app focuses on formulation transparency and structural comparison through coordinated multi-panel visualization.
 
-Panel C — Ingredient Heatmap Comparison
-When multiple drugs are selected, a heatmap appears showing ingredient presence across products. Rows represent drugs and columns represent ingredients, allowing users to quickly identify formulation overlap or differences.
+------------------------------------------------------------------------
 
-An optional bar chart summarizes how many distinct formulations exist within a product group, helping users understand true formulation diversity.
+## High-Level Interface Design
 
-The app emphasizes structured comparison across multiple coordinated visual panels rather than a single chart, supporting clear and realistic implementation within project scope.Interactive Drug Identity & Comparison Dashboard
-High-Level App Description
+The interface begins with a search bar where users can enter a brand name, generic name, or active ingredient. The system normalizes the input to a standardized RxNorm identity and retrieves associated ingredient and formulation information.
 
-This interactive dashboard helps users understand whether two drug products are truly different or simply marketed differently. The app is designed for identity clarification and formulation comparison, not medical advice.
+After a search is submitted, three coordinated panels are displayed:
 
-The interface begins with a search bar where users can enter a brand name, generic name, or active ingredient. The system normalizes the input to a standardized drug identity and retrieves its active ingredients.
+### Panel A — Drug Information Panel
 
-After searching, the interface displays three coordinated panels:
+This panel provides a concise summary of the selected drug, including:
 
-Panel A — Drug Information Panel
-This panel summarizes the selected drug, including its brand and generic names, active ingredients, pharmacologic class, and formulation type (single vs. combination). A toggle allows users to view a naming hierarchy that visually maps Ingredient → Generic → Brand relationships.
+-   Brand and generic names\
+-   Active ingredient(s)\
+-   Pharmacologic class\
+-   Formulation type (single vs. combination)
 
-Panel B — Similarity Cluster View
-A 2D similarity map displays related drug formulations based on ingredient composition. The searched drug is highlighted, and nearby drugs can be selected for comparison. This supports exploratory discovery.
+Users can optionally expand a naming hierarchy view that maps Ingredient → Generic → Brand relationships to clarify naming redundancy.
 
-Panel C — Ingredient Heatmap Comparison
-When multiple drugs are selected, a heatmap appears showing ingredient presence across products. Rows represent drugs and columns represent ingredients, allowing users to quickly identify formulation overlap or differences.
+------------------------------------------------------------------------
 
-An optional bar chart summarizes how many distinct formulations exist within a product group, helping users understand true formulation diversity.
+### Panel B — Similarity Cluster View
 
-The app emphasizes structured comparison across multiple coordinated visual panels rather than a single chart, supporting clear and realistic implementation within project scope.
+A 2D similarity map visualizes related drugs based on ingredient composition. The searched drug is highlighted as the anchor point, and nearby drugs can be selected for further comparison. This panel supports exploratory discovery and contextual understanding of formulation similarity.
+
+------------------------------------------------------------------------
+
+### Panel C — Ingredient Heatmap Comparison
+
+When multiple drugs are selected, an ingredient comparison heatmap is displayed:
+
+-   Rows represent selected drugs\
+-   Columns represent active ingredients\
+-   Cell shading indicates ingredient presence
+
+This allows users to quickly identify overlapping or distinct formulations.
+
+------------------------------------------------------------------------
+
+### Optional — Formulation Equivalence Summary
+
+An optional bar chart summarizes how many distinct formulation groups exist within a product family, highlighting structural redundancy across marketed products.
+
+------------------------------------------------------------------------
+
+## Data Sources
+
+-   **RxNorm** – standardized drug identity and ingredient mapping\
+-   **RxClass** – pharmacologic class metadata
+
+The app uses structured ingredient relationships to compute similarity and visualize formulation overlap.
+
+------------------------------------------------------------------------
+
+## App Sketch
+
+The following sketch illustrates the planned layout and interaction flow of the dashboard:
+
+![](assets/drug_dashboard_sketch.png){width="1000"}
+
+------------------------------------------------------------------------
+
+## One-Sentence Summary
+
+An interactive dashboard that uses RxNorm to clarify drug identity, visualize formulation similarity, and reduce brand-based confusion through structured comparison tools.
