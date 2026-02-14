@@ -80,7 +80,7 @@ Documentation improvements are highly encouraged. This includes:
 ## Code of Conduct
 
 All contributors must abide by our Code of Conduct:
-[Code of Conduct](Code_of_Conduct.md)
+[Code of Conduct](Code of Conduct.md)
 Respectful and professional collaboration is required at all times.
 
 ---
