@@ -106,16 +106,17 @@ def Fetch_Exact_Drugs(Ing_lst, ing_names, current_id):
     """
     Finds drugs that contain EXACTLY the same set of ingredients as the input.
     No more, no less.
+    Returns RXCUI, Product_Name, and STR for debugging.
     """
     if not Ing_lst:
-        return pd.DataFrame(columns=["RXCUI", "Product_Name"])
+        return pd.DataFrame(columns=["RXCUI", "Product_Name", "STR"])
 
     ing_tuple = tuple(Ing_lst) if len(Ing_lst) > 1 else f"('{Ing_lst[0]}')"
 
     query = f"""
     SELECT r2.RXCUI, r2.STR
     FROM RXNCONSO r2
-    WHERE r2.TTY = 'DP' 
+    WHERE r2.TTY IN ('DP') 
       AND r2.RXCUI != :current_id
       -- 1. Ensure it matches all the ingredients we provided
       AND r2.RXCUI IN (
@@ -126,7 +127,6 @@ def Fetch_Exact_Drugs(Ing_lst, ing_names, current_id):
           HAVING COUNT(DISTINCT RXCUI1) = :ing_count
       )
       -- 2. Ensure its TOTAL ingredient count is exactly the same as our list
-      -- This filters out drugs that have 'Your 2 + 1 extra'
       AND (
           SELECT COUNT(DISTINCT RXCUI1) 
           FROM RXNREL 
@@ -152,9 +152,10 @@ def Fetch_Exact_Drugs(Ing_lst, ing_names, current_id):
                 res = res[~res['Product_Name'].str.contains(re.escape(name), case=False, na=False)]
         
         res.reset_index(drop=True, inplace=True)
-        return res[["RXCUI", "Product_Name"]]
+        # Return STR for debugging
+        return res[["RXCUI", "Product_Name", "STR"]]
         
-    return pd.DataFrame(columns=["RXCUI", "Product_Name"])
+    return pd.DataFrame(columns=["RXCUI", "Product_Name", "STR"])
 
 def Fetch_Dose_Form(ID):
     query = text("SELECT c.STR FROM RXNCONSO c JOIN RXNREL r ON c.RXCUI = r.RXCUI2 WHERE r.RXCUI1 = :id AND c.TTY = 'DF'")
