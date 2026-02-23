@@ -20,6 +20,15 @@ def Fetch_Related_Drugs(Ing_lst, current_id):
 
     ing_tuple = tuple(Ing_lst) if len(Ing_lst) > 1 else f"('{Ing_lst[0]}')"
 
+    # Handle single vs multi ingredient properly
+    if len(Ing_lst) == 1:
+        having_clause = "COUNT(DISTINCT r1.RXCUI1) >= 1"
+    else:
+        having_clause = """
+            COUNT(DISTINCT r1.RXCUI1) > 0
+            AND COUNT(DISTINCT r1.RXCUI1) < :ing_count
+        """
+
     query = f"""
     SELECT 
         r2.RXCUI as RXCUI, 
@@ -30,8 +39,7 @@ def Fetch_Related_Drugs(Ing_lst, current_id):
       AND r2.TTY = 'DP'
       AND r2.RXCUI != :current_id
     GROUP BY r2.RXCUI, r2.STR
-    HAVING COUNT(DISTINCT r1.RXCUI1) > 0 
-       AND COUNT(DISTINCT r1.RXCUI1) < :ing_count
+    HAVING {having_clause}
     """
     
     with engine.connect() as conn:
