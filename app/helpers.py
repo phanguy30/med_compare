@@ -16,7 +16,7 @@ load_dotenv()
 engine = create_engine(f"mysql+pymysql://root:@localhost:3306/rxnorm?charset=utf8mb4")
 
 
-def Fetch_Exact_Drugs(Ing_lst, ing_names, current_id):
+def Fetch_Exact_Drugs(Ing_lst, ing_names, current_id, current_name):
     if not Ing_lst:
         return pd.DataFrame(columns=["RXCUI", "Product_Name", "STR"])
 
@@ -57,6 +57,7 @@ def Fetch_Exact_Drugs(Ing_lst, ing_names, current_id):
 
     res = res[res['STR'].str.contains(r'\[.*\]', na=False)].copy()
     res = extract_name(res)
+    res = res[res["Product_Name"].str.lower() != current_name.lower()]
 
     if ing_names:
         for name in ing_names:
