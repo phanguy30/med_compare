@@ -1,4 +1,4 @@
-from dash import html, dash, no_update
+from dash import html, no_update, ctx
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -153,25 +153,21 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def toggle_modal(n_open, n_close, is_open, ing_ids, ing_names, selected_drug):
-        ctx = dash.callback_context
-        if not ctx.triggered:
-            return is_open, no_update
-
-        trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        trigger_id = ctx.triggered_id  # "open-modal" or "close-modal"
 
         if trigger_id == "open-modal" and n_open:
-            df_full = Fetch_Exact_Drugs(
-                ing_ids, ing_names, selected_drug["id"]
-            )
+            df_full = Fetch_Exact_Drugs(ing_ids, ing_names, selected_drug["id"])
 
             full_list = dbc.ListGroup(
                 [dbc.ListGroupItem(row["Product_Name"]) for _, row in df_full.iterrows()],
                 flush=True
             )
-
             return True, full_list
 
-        return False, no_update
+        if trigger_id == "close-modal" and n_close:
+            return False, no_update
+
+        return is_open, no_update
 
 
     # --- Heatmap ---
