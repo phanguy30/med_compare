@@ -14,40 +14,104 @@ load_dotenv()
 engine = create_engine(f"mysql+pymysql://root:@localhost:3306/rxnorm?charset=utf8mb4")
 
 # --- Helper Functions ---
+from sqlalchemy import bindparam
+
+def Fetch_Exact_Drugs(Ing_lst, ing_names, current_id):
+    if not Ing_lst:
+        return pd.DataFrame(columns=["RXCUI", "Product_Name", "STR"])
+
+    query = text("""
+        SELECT r2.RXCUI, r2.STR
+        FROM RXNCONSO r2
+        WHERE r2.TTY = 'DP'
+          AND r2.RXCUI != :current_id
+          AND r2.RXCUI IN (
+              SELECT RXCUI2
+              FROM RXNREL
+              WHERE RXCUI1 IN :ing_list
+                AND RELA = 'consists_of'
+              GROUP BY RXCUI2
+              HAVING COUNT(DISTINCT RXCUI1) = :ing_count
+          )
+          -- First condition ensures all ingredients are present, second condition ensures no extra ingredients
+          AND (
+              SELECT COUNT(DISTINCT RXCUI1)
+              FROM RXNREL
+              WHERE RXCUI2 = r2.RXCUI
+                AND RELA = 'consists_of'
+          ) = :ing_count
+    """).bindparams(bindparam("ing_list", expanding=True))
+
+    with engine.connect() as conn:
+        res = pd.read_sql(
+            query,
+            conn,
+            params={
+                "current_id": current_id,
+                "ing_count": len(Ing_lst),
+                "ing_list": Ing_lst
+            }
+        )
+
+    if res.empty:
+        return pd.DataFrame(columns=["RXCUI", "Product_Name", "STR"])
+
+    res = res[res['STR'].str.contains(r'\[.*\]', na=False)].copy()
+    res = extract_name(res)
+
+    if ing_names:
+        for name in ing_names:
+            res = res[~res['Product_Name'].str.contains(
+                re.escape(name), case=False, na=False
+            )]
+
+    res.reset_index(drop=True, inplace=True)
+    return res[["RXCUI", "Product_Name", "STR"]]
+
+
 def Fetch_Related_Drugs(Ing_lst, current_id):
     if not Ing_lst:
         return pd.DataFrame(columns=["RXCUI", "STR", "Product_Name"])
 
-    ing_tuple = tuple(Ing_lst) if len(Ing_lst) > 1 else f"('{Ing_lst[0]}')"
+    query = text("""
+        SELECT 
+            r2.RXCUI AS RXCUI,
+            r2.STR AS STR
+        FROM RXNREL r1
+        JOIN RXNCONSO r2 ON r1.RXCUI2 = r2.RXCUI
+        WHERE r1.RXCUI1 IN :ing_list
+          AND r1.RELA = 'consists_of'
+          AND r2.TTY = 'DP'
+          AND r2.RXCUI != :current_id
+        GROUP BY r2.RXCUI, r2.STR
+        -- First condition returns the count of matching ingredients, second condition ensures no extra ingredients
+        -- Not means that it will remove the exact matchings
+        HAVING NOT (
+            COUNT(DISTINCT CASE 
+                WHEN r1.RXCUI1 IN :ing_list 
+                THEN r1.RXCUI1 
+            END) = :ing_count
+            AND
+            (
+                SELECT COUNT(DISTINCT RXCUI1)
+                FROM RXNREL
+                WHERE RXCUI2 = r2.RXCUI
+                  AND RELA = 'consists_of'
+            ) = :ing_count
+        )
+    """).bindparams(bindparam("ing_list", expanding=True))
 
-    # Handle single vs multi ingredient properly
-    if len(Ing_lst) == 1:
-        having_clause = "COUNT(DISTINCT r1.RXCUI1) >= 1"
-    else:
-        having_clause = """
-            COUNT(DISTINCT r1.RXCUI1) > 0
-            AND COUNT(DISTINCT r1.RXCUI1) < :ing_count
-        """
-
-    query = f"""
-    SELECT 
-        r2.RXCUI as RXCUI, 
-        r2.STR as STR
-    FROM RXNREL r1
-    JOIN RXNCONSO r2 ON r1.RXCUI2 = r2.RXCUI
-    WHERE r1.RXCUI1 IN {ing_tuple} 
-      AND r2.TTY = 'DP'
-      AND r2.RXCUI != :current_id
-    GROUP BY r2.RXCUI, r2.STR
-    HAVING {having_clause}
-    """
-    
     with engine.connect() as conn:
-        res = pd.read_sql(text(query), conn, params={
-            'current_id': current_id, 
-            'ing_count': len(Ing_lst)
-        })
-    
+        res = pd.read_sql(
+            query,
+            conn,
+            params={
+                "current_id": current_id,
+                "ing_list": Ing_lst,
+                "ing_count": len(Ing_lst)
+            }
+        )
+
     if not res.empty:
         res = res[res['STR'].str.contains(r'\[.*\]', na=False)].copy()
         res["Product_Name"] = res["STR"].str.extract(r'\[(.*?)\]')
@@ -56,7 +120,7 @@ def Fetch_Related_Drugs(Ing_lst, current_id):
         res = res[res["Product_Name"].str.lower() != "generic"]
         res.drop_duplicates(subset="RXCUI", inplace=True)
         res.reset_index(drop=True, inplace=True)
-        
+
     return res
 
 def extract_name(df):
@@ -102,60 +166,7 @@ def Fetch_Ingredients(ID):
             })
     return pd.DataFrame(parsed_data)
 
-def Fetch_Exact_Drugs(Ing_lst, ing_names, current_id):
-    """
-    Finds drugs that contain EXACTLY the same set of ingredients as the input.
-    No more, no less.
-    Returns RXCUI, Product_Name, and STR for debugging.
-    """
-    if not Ing_lst:
-        return pd.DataFrame(columns=["RXCUI", "Product_Name", "STR"])
 
-    ing_tuple = tuple(Ing_lst) if len(Ing_lst) > 1 else f"('{Ing_lst[0]}')"
-
-    query = f"""
-    SELECT r2.RXCUI, r2.STR
-    FROM RXNCONSO r2
-    WHERE r2.TTY IN ('DP') 
-      AND r2.RXCUI != :current_id
-      -- 1. Ensure it matches all the ingredients we provided
-      AND r2.RXCUI IN (
-          SELECT RXCUI2 
-          FROM RXNREL 
-          WHERE RXCUI1 IN {ing_tuple}
-          GROUP BY RXCUI2
-          HAVING COUNT(DISTINCT RXCUI1) = :ing_count
-      )
-      -- 2. Ensure its TOTAL ingredient count is exactly the same as our list
-      AND (
-          SELECT COUNT(DISTINCT RXCUI1) 
-          FROM RXNREL 
-          WHERE RXCUI2 = r2.RXCUI 
-          AND RELA = 'consists_of'
-      ) = :ing_count
-    """
-    
-    with engine.connect() as conn:
-        res = pd.read_sql(text(query), conn, params={
-            'current_id': current_id, 
-            'ing_count': len(Ing_lst)
-        })
-    
-    if not res.empty:
-        # Standard cleaning logic
-        res = res[res['STR'].str.contains(r'\[.*\]', na=False)].copy()
-        res = extract_name(res)
-        
-        # Filter out rows where the product name contains an ingredient name
-        if ing_names:
-            for name in ing_names:
-                res = res[~res['Product_Name'].str.contains(re.escape(name), case=False, na=False)]
-        
-        res.reset_index(drop=True, inplace=True)
-        # Return STR for debugging
-        return res[["RXCUI", "Product_Name", "STR"]]
-        
-    return pd.DataFrame(columns=["RXCUI", "Product_Name", "STR"])
 
 def Fetch_Dose_Form(ID):
     query = text("SELECT c.STR FROM RXNCONSO c JOIN RXNREL r ON c.RXCUI = r.RXCUI2 WHERE r.RXCUI1 = :id AND c.TTY = 'DF'")
