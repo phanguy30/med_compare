@@ -102,7 +102,7 @@ def register_callbacks(app):
             return "No ingredients found."
 
         df_matches = Fetch_Exact_Drugs(
-            ing_ids, ing_names, selected_drug["id"]
+            ing_ids, ing_names, selected_drug["id"], selected_drug["name"]
         )
 
         if df_matches.empty:
