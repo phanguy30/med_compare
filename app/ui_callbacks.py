@@ -156,7 +156,7 @@ def register_callbacks(app):
         trigger_id = ctx.triggered_id  # "open-modal" or "close-modal"
 
         if trigger_id == "open-modal" and n_open:
-            df_full = Fetch_Exact_Drugs(ing_ids, ing_names, selected_drug["id"])
+            df_full = Fetch_Exact_Drugs(ing_ids, ing_names, selected_drug["id"], selected_drug["name"])
 
             full_list = dbc.ListGroup(
                 [dbc.ListGroupItem(row["Product_Name"]) for _, row in df_full.iterrows()],
