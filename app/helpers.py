@@ -11,6 +11,7 @@ from dash.dependencies import Input, Output, State
 from sqlalchemy import bindparam
 import numpy as np
 import umap
+from difflib import get_close_matches
 
 load_dotenv()
 
@@ -244,10 +245,7 @@ def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
     sql_ing = text(f"""
         SELECT
             r.RXCUI1 AS ID,
-            c.STR    AS Ingredient,
-            -- If you have a concentration column elsewhere, join it here.
-            -- For now, keep a placeholder concentration = 1 if present, else 0 won't appear anyway.
-            1.0 AS Concentration
+            c.STR    AS Full_Ingredient
         FROM RXNREL r
         JOIN RXNCONSO c
             ON c.RXCUI = r.RXCUI2
@@ -257,20 +255,33 @@ def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
 
     long_df = pd.read_sql(sql_ing, engine, params=params)
 
-    # If you truly have concentrations, replace the query above to bring the real concentration.
-    # Then keep this numeric cleanup:
-    long_df["Concentration"] = pd.to_numeric(long_df["Concentration"], errors="coerce").fillna(0)
-
     if long_df.empty:
         out = df_extended.drop_duplicates("Product_Name")[["Product_Name", "ID"]].copy()
         out["Ingredients_List"] = [[] for _ in range(len(out))]
         out["Dose_Form"] = None
         return out.reset_index(drop=True)
 
-    # Add Product_Name by merging
+    # ensure ID is string for merge
+    long_df["ID"] = long_df["ID"].astype(str)
+
+    # ---- 2) Parse "name + MG" into Ingredient + Concentration ----
+    def parse_name_and_mg(full_str):
+        full_str = str(full_str)
+        match = re.search(r"(.+?)\s+(\d+(?:\.\d+)?)\s+MG\b", full_str, re.IGNORECASE)
+        if match:
+            return match.group(1).strip(), float(match.group(2))
+        return full_str, 0.0
+
+    parsed = long_df["Full_Ingredient"].apply(parse_name_and_mg)
+    long_df["Ingredient"] = parsed.apply(lambda t: t[0])
+    long_df["Concentration"] = parsed.apply(lambda t: t[1])
+
+    long_df["Concentration"] = pd.to_numeric(long_df["Concentration"], errors="coerce").fillna(0)
+
+    # ---- 3) Add Product_Name by merging ----
     long_df = long_df.merge(df_extended[["ID", "Product_Name"]], on="ID", how="left")
 
-    # ---- 2) Pivot ----
+    # ---- 4) Pivot wide for heatmap ----
     heatmap_wide = (
         long_df.pivot_table(
             index="Product_Name",
@@ -301,27 +312,34 @@ def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
         .merge(id_df, on="Product_Name", how="left")
     )
 
-    # ---- 3) OPTIONAL: Dose_Form in ONE query ----
-    # Only do this if you really need it for UMAP / tooltips.
-    # If Dose_Form() is also doing DB work, do a bulk fetch here similarly.
-
-    heatmap_df["Dose_Form"] = None  # placeholder; fill via bulk query if needed
-
+    heatmap_df["Dose_Form"] = None
     return heatmap_df
 
-def Create_Altair_Heatmap(heatmap_df, drug_of_interest_name):
+def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by="ID"):
+    """
+    drug_of_interest:
+      - if match_by="ID": pass the numeric/string ID value
+      - if match_by="Product_Name": pass the full product name (not truncated)
+    """
+
+    import pandas as pd
+    import altair as alt
+
     if "Product_Name" not in heatmap_df.columns:
         heatmap_df = heatmap_df.reset_index()
 
+    # ---- Dynamic height ----
     num_products = heatmap_df["Product_Name"].nunique()
     height_per_product = 20
     dynamic_height = max(250, min(1400, num_products * height_per_product))
 
+    # ---- Ingredient columns ----
     non_ingredient_cols = {"Product_Name", "Ingredients_List", "ID", "Dose_Form"}
     value_cols = [c for c in heatmap_df.columns if c not in non_ingredient_cols]
 
+    # ---- Long format ----
     df_long = heatmap_df.melt(
-        id_vars=["Product_Name"],
+        id_vars=["Product_Name", "ID"],
         value_vars=value_cols,
         var_name="Ingredient",
         value_name="Concentration"
@@ -331,6 +349,29 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest_name):
     df_long["Ingredient"] = df_long["Ingredient"].astype(str)
     df_long["Concentration"] = pd.to_numeric(df_long["Concentration"], errors="coerce").fillna(0)
 
+    # ---- Selected flag (NO fuzzy match) ----
+    if match_by == "ID":
+        selected_id = str(drug_of_interest).strip()
+        df_long["ID_str"] = df_long["ID"].astype(str).str.strip()
+        df_long["is_selected"] = df_long["ID_str"].eq(selected_id)
+        highlight_title = df_long.loc[df_long["is_selected"], "Product_Name"].iloc[0] if df_long["is_selected"].any() else f"ID={selected_id}"
+
+    elif match_by == "Product_Name":
+        selected_name = str(drug_of_interest).strip().lower()
+        df_long["Product_Name_norm"] = df_long["Product_Name"].str.strip().str.lower()
+        df_long["is_selected"] = df_long["Product_Name_norm"].eq(selected_name)
+        highlight_title = drug_of_interest
+
+    else:
+        raise ValueError("match_by must be 'ID' or 'Product_Name'")
+
+    # If nothing matched, show message (so you immediately know why)
+    if not df_long["is_selected"].any():
+        return alt.Chart(pd.DataFrame({
+            "msg": [f"No match found for {match_by} = {drug_of_interest}. (No row highlighted)"]
+        })).mark_text(size=14).encode(text="msg:N")
+
+    # ---- Relative concentration per ingredient ----
     df_long["Relative_Conc"] = (
         df_long.groupby("Ingredient")["Concentration"]
         .transform(lambda x: x / x.max() if x.max() != 0 else 0)
@@ -340,55 +381,60 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest_name):
     if len(ingredients) == 0:
         return alt.Chart(pd.DataFrame({"msg": ["No data to plot."]})).mark_text().encode(text="msg:N")
 
-    first_ing = ingredients[0]
-    last_ing = ingredients[-1]
-
+    # ---- Row helper for zebra + selected band ----
     df_rows = (
-        df_long[["Product_Name"]]
+        df_long[["Product_Name", "is_selected"]]
         .drop_duplicates()
         .sort_values("Product_Name")
         .reset_index(drop=True)
     )
     df_rows["row_index"] = df_rows.index
     df_rows["is_odd"] = (df_rows["row_index"] % 2 == 1)
-    df_rows["x_start"] = first_ing
-    df_rows["x_end"] = last_ing
+    df_rows["x_start"] = ingredients[0]
+    df_rows["x_end"] = ingredients[-1]
 
-    # Shared encodings
     base = alt.Chart(df_long).encode(
-    x=alt.X(
-        "Ingredient:N",
-        axis=alt.Axis(labelAngle=-45),
-        sort=ingredients,
-        scale=alt.Scale(padding=0) 
-    ),
-    y=alt.Y("Product_Name:N", sort='-x')
-)
+        x=alt.X(
+            "Ingredient:N",
+            axis=alt.Axis(labelAngle=-45),
+            sort=ingredients,
+            scale=alt.Scale(padding=0)
+        ),
+        y=alt.Y("Product_Name:N", sort='-x')
+    )
 
+    # Zebra bands
     row_bands = alt.Chart(df_rows).mark_rect().encode(
-    x=alt.X(
-        "x_start:N",
-        sort=ingredients,
-        scale=alt.Scale(padding=0), 
-        title=None
-    ),
-    x2="x_end:N",
-    y=alt.Y("Product_Name:N", sort='-x'),
-    color=alt.condition(
-        alt.datum.is_odd,
-        alt.value("#efe7f6"),
-        alt.value("#f6f3ef")
-    )
-)
-    # 1) Highlight zero cells ONLY for drug_of_interest row
-    highlight_zeros = base.transform_filter(
-        (alt.datum.Product_Name == str(drug_of_interest_name)) &
-        (alt.datum.Concentration == 0)
-    ).mark_rect().encode(
-        color=alt.value("#f3d7d7")
+        x=alt.X("x_start:N", sort=ingredients, scale=alt.Scale(padding=0), title=None),
+        x2="x_end:N",
+        y=alt.Y("Product_Name:N", sort='-x'),
+        color=alt.condition(
+            alt.datum.is_odd,
+            alt.value("#f3f3f3"),
+            alt.value("white")
+        )
     )
 
-    # 2) Main heatmap: non-zero cells only
+    # Strong selected row band
+    selected_row_band = alt.Chart(df_rows).transform_filter(
+        alt.datum.is_selected
+    ).mark_rect(
+        color="#cfe8ff",
+        opacity=0.45
+    ).encode(
+        x=alt.X("x_start:N", sort=ingredients, scale=alt.Scale(padding=0), title=None),
+        x2="x_end:N",
+        y=alt.Y("Product_Name:N", sort='-x')
+    )
+
+    # Zero cells highlight only for selected row
+    highlight_zeros = base.transform_filter(
+        alt.datum.is_selected & (alt.datum.Concentration == 0)
+    ).mark_rect().encode(
+        color=alt.value("#f8d7da")
+    )
+
+    # Main heatmap (non-zero)
     nonzero_layer = base.transform_filter(
         alt.datum.Concentration > 0
     ).mark_rect().encode(
@@ -405,22 +451,37 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest_name):
         ]
     )
 
-    chart = (row_bands + highlight_zeros + nonzero_layer).properties(
-    width= 1300,
-    height=dynamic_height,
-    title=f"Ingredient Concentration Heatmap (zebra rows + 0-cells highlighted for: {drug_of_interest_name})"
+    # Outline each cell in selected row
+    row_cell_outline = base.transform_filter(
+        alt.datum.is_selected
+    ).mark_rect(
+        fillOpacity=0,
+        stroke="#2b6cb0",
+        strokeWidth=2,
+        strokeOpacity=1
+    )
+
+    chart = (
+        row_bands +
+        selected_row_band +
+        highlight_zeros +
+        nonzero_layer +
+        row_cell_outline
+    ).properties(
+        width=1300,
+        height=dynamic_height,
+        title=f"Ingredient Concentration Heatmap (Highlighted: {highlight_title})"
     ).configure_view(
-        fill="white",          # change here
+        fill="white",
         strokeOpacity=0
     ).configure(
-        background="white"     # change here
+        background="white"
     )
 
     return chart
 
 def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, jitter_strength=0.15):
 
-    # ---- 0) Hard checks ----
     if heatmap_df is None:
         raise ValueError("heatmap_df is None")
     if heatmap_df.empty:
@@ -429,12 +490,10 @@ def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, 
     ignore_cols = {"Product_Name", "Ingredients_List", "ID", "Dose_Form"}
     ingredient_cols = [c for c in heatmap_df.columns if c not in ignore_cols]
 
-    # Dose form one-hot
     df_form = heatmap_df[["Dose_Form"]].copy()
     df_form["Dose_Form"] = df_form["Dose_Form"].fillna("UNKNOWN").astype(str)
     form_ohe = pd.get_dummies(df_form["Dose_Form"], prefix="DF").astype(float) * float(doseform_weight)
 
-    # Ingredient features
     if len(ingredient_cols) > 0:
         X_ing = (
             heatmap_df[ingredient_cols]
@@ -443,7 +502,6 @@ def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, 
             .to_numpy(dtype=float)
         )
     else:
-        # No ingredient columns → (n,0)
         X_ing = np.zeros((len(heatmap_df), 0), dtype=float)
 
     # Combine
