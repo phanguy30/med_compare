@@ -1,76 +1,112 @@
-# layout.py
-
-from dash import dcc, html
+from dash import html, dcc
 import dash_bootstrap_components as dbc
 
 def create_layout():
     return dbc.Container([
-        dcc.Store(id='selected-drug-store'),
-        dcc.Store(id='ingredient-ids-store'),
-        dcc.Store(id='ingredient-names-store'),
 
-        html.H2("Drug Identity Dashboard", className="text-center mt-4"),
+        # ----------------------------
+        # STORES
+        # ----------------------------
+        dcc.Store(id="selected-drug-store"),
+        dcc.Store(id="ingredient-ids-store"),
+        dcc.Store(id="ingredient-names-store"),
+        dcc.Store(id="matches-store"),
+        dcc.Store(id="heatmap-df-store"),
+
+        html.H2("Drug Explorer", className="my-4"),
+
+        # ----------------------------
+        # SEARCH
+        # ----------------------------
+        dcc.Dropdown(
+            id="drug-search-dropdown",
+            placeholder="Search for a drug..."
+        ),
+
         html.Hr(),
-        
+
+        # =========================================================
+        # ROW 1: Drug Info (left) + Exact Matches (right)
+        # =========================================================
         dbc.Row([
+
+            # LEFT: Drug Info
             dbc.Col([
-                html.Label("Search for a Drug:"),
-                dcc.Dropdown(
-                    id="drug-search-dropdown",
-                    placeholder="Type to search...",
-                    searchable=True,
-                    clearable=True
-                )
-            ], width=6)
+                html.H4("Drug Information"),
+                html.Div(id="drug-info-content"),
+            ], md=6),
+
+            # RIGHT: Exact Matches
+            dbc.Col([
+                html.H4("Exact Matches"),
+                html.Div(id="exact-matches-content"),
+
+                # Button must exist at startup
+                dbc.Button(
+                    "View all equivalents...",
+                    id="open-modal",
+                    color="link",
+                    size="sm",
+                    className="mt-2 p-0",
+                    style={"display": "none"}  # hidden until needed
+                ),
+            ], md=6),
+
+        ], className="mb-4"),  # spacing under row
+
+
+        # =========================================================
+        # ROW 2: UMAP (left) + Bar Chart (right)
+        # =========================================================
+        dbc.Row([
+
+            dbc.Col([
+                html.H4("Drug Similarity (UMAP)"),
+                html.Iframe(
+                    id="umap-iframe",
+                    style={"width": "100%", "height": "650px", "border": "none"}
+                ),
+            ], md=6),
+
+            dbc.Col([
+                html.H4("Ingredient Frequency Bar Chart"),
+                html.Iframe(
+                    id="bar-iframe",
+                    style={"width": "100%", "height": "650px", "border": "none"}
+                ),
+            ], md=6),
+
         ], className="mb-4"),
 
+
+        # =========================================================
+        # ROW 3: Heatmap (full width)
+        # =========================================================
         dbc.Row([
             dbc.Col([
-                dbc.Card([
-                    dbc.CardHeader(html.H4("Drug Information")),
-                    dbc.CardBody(
-                        id="drug-info-content",
-                        children="Select a drug to view details."
-                    )
-                ])
-            ], width=6),
+                html.H4("Related Drugs Heatmap"),
+                html.Iframe(
+                    id="heatmap-iframe",
+                    style={"width": "100%", "height": "700px", "border": "none"}
+                ),
+            ], md=12),
+        ], className="mb-4"),
 
-            dbc.Col([
-                dbc.Modal([
-                    dbc.ModalHeader(dbc.ModalTitle("All Branded Equivalents")),
-                    dbc.ModalBody(id="full-branded-list-modal-body"),
-                    dbc.ModalFooter(
-                        dbc.Button("Close", id="close-modal", className="ms-auto", n_clicks=0)
-                    ),
-                ], id="branded-modal", is_open=False, scrollable=True),
 
-                dbc.Card([
-                    dbc.CardHeader(html.H4("Branded Equivalents")),
-                    dbc.CardBody(
-                        id="exact-matches-content",
-                        children="No data loaded."
-                    )
-                ])
-            ], width=6)
-        ]),
+        # ----------------------------
+        # MODAL (must exist at startup)
+        # ----------------------------
+        dbc.Modal(
+            [
+                dbc.ModalHeader(dbc.ModalTitle("All Exact Matches")),
+                dbc.ModalBody(id="full-branded-list-modal-body"),
+                dbc.ModalFooter(
+                    dbc.Button("Close", id="close-modal", className="ms-auto")
+                ),
+            ],
+            id="branded-modal",
+            size="lg",
+            is_open=False,
+        ),
 
-        dbc.Row([
-            dbc.Col([
-                dbc.Card([
-                    dbc.CardHeader(
-                        html.H4("Ingredient Concentration Heatmap (Related Drugs)")
-                    ),
-                    dbc.CardBody([
-                        html.Iframe(
-                            id="heatmap-iframe",
-                            style={
-                                "border": "none",
-                                "width": "100%",
-                                "height": "550px"
-                            }
-                        )
-                    ])
-                ], className="mt-4 mb-5")
-            ])
-        ])
     ], fluid=True)
