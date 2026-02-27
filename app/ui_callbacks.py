@@ -8,7 +8,7 @@ from app.helpers import (
     Fetch_Ingredients,
     Fetch_Dose_Form,
     Fetch_Generic_Name,
-    Exact_Drugs,
+    Exact_drugs,
     Union_Drugs,
     Ing_count,
     Fetch_Matches,

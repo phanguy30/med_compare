@@ -1,4 +1,5 @@
 import dash
+import os
 from dash import dcc, html, dash_table
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -12,8 +13,16 @@ from sqlalchemy import bindparam
 
 load_dotenv()
 
-# --- Database Setup ---
-engine = create_engine(f"mysql+pymysql://root:@localhost:3306/rxnorm?charset=utf8mb4")
+host = os.getenv("MYSQL_HOST", "localhost")
+port = os.getenv("MYSQL_PORT", "3306")
+user = os.getenv("MYSQL_USER","root")
+password = os.getenv("MYSQL_PSWD","2316")
+db = os.getenv("MYSQL_DB", "rxnorm")
+
+engine = create_engine(
+    f"mysql+pymysql://{user}:{password}@{host}:{port}/{db}?charset=utf8mb4"
+)
+
 
 def Exact_drugs(Ing_lst,ID):
     s = ""
