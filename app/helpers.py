@@ -15,118 +15,123 @@ load_dotenv()
 # --- Database Setup ---
 engine = create_engine(f"mysql+pymysql://root:@localhost:3306/rxnorm?charset=utf8mb4")
 
+def Exact_drugs(Ing_lst,ID):
+    s = ""
+    for i,j in enumerate(Ing_lst):
+        if i == (len(Ing_lst) - 1):
+            s+="r1.RXCUI1 = "+j
+        else:
+            s+="r1.RXCUI1 = "+j+" or "
+            
+    query = f"""
+    WITH base AS (
+        SELECT r2.RXCUI as ID, r2.STR as DP, r1.RXCUI1 as Ingredient_ID
+        FROM RXNREL r1
+        JOIN RXNCONSO r2
+        ON r1.RXCUI2 = r2.RXCUI
+        WHERE ({s}) and r2.TTY = "DP"
+    ),
+    keys_all AS (
+        SELECT ID
+        FROM base
+        GROUP by ID
+        HAVING COUNT(DISTINCT Ingredient_ID) = {len(Ing_lst)}
+    )
+    SELECT b.ID,b.DP
+    FROM base b
+    JOIN keys_all k
+    ON b.ID = k.ID
+    GROUP BY b.ID, b.DP
+    """
+    
+    res = pd.read_sql(query, engine)
+    dp = res["DP"].astype("string")
 
-def Fetch_Exact_Drugs(Ing_lst, ing_names, current_id, current_name):
-    if not Ing_lst:
-        return pd.DataFrame(columns=["RXCUI", "Product_Name", "STR"])
-
-    query = text("""
-        SELECT r2.RXCUI, r2.STR
-        FROM RXNCONSO r2
-        WHERE r2.TTY IN ('SCD','SBD','GPCK','BPCK','DP')
-        AND r2.LAT = 'ENG'
-        AND r2.RXCUI IN (
-            SELECT r.RXCUI2
-            FROM RXNREL r
-            WHERE r.RXCUI1 IN :ing_list
-                AND r.RELA = 'consists_of'
-            GROUP BY r.RXCUI2
-            HAVING COUNT(DISTINCT r.RXCUI1) = :ing_count
-        )
-        AND (
-            SELECT COUNT(DISTINCT r3.RXCUI1)
-            FROM RXNREL r3
-            WHERE r3.RXCUI2 = r2.RXCUI
-                AND r3.RELA = 'consists_of'
-        ) = :ing_count;
-    """).bindparams(bindparam("ing_list", expanding=True))
-
-    with engine.connect() as conn:
-        res = pd.read_sql(
-            query,
-            conn,
-            params={
-                "current_id": current_id,
-                "ing_count": len(Ing_lst),
-                "ing_list": Ing_lst
-            }
-        )
-
-    if res.empty:
-        return pd.DataFrame(columns=["RXCUI", "Product_Name", "STR"])
-
-    res = res[res['STR'].str.contains(r'\[.*\]', na=False)].copy()
-    res = extract_name(res)
-    res = res[res["Product_Name"].str.lower() != current_name.lower()]
-
-    if ing_names:
-        for name in ing_names:
-            res = res[~res['Product_Name'].str.contains(
-                re.escape(name), case=False, na=False
-            )]
-
-    res.reset_index(drop=True, inplace=True)
-    return res[["RXCUI", "Product_Name", "STR"]]
-
-
-def Fetch_Related_Drugs(Ing_lst, current_id):
-    if not Ing_lst:
-        return pd.DataFrame(columns=["RXCUI", "STR", "Product_Name"])
-
-    query = text("""
-        SELECT c.RXCUI, c.STR
-        FROM RXNCONSO c
-        WHERE c.TTY = 'DP'
-          AND c.LAT = 'ENG'
-          AND c.RXCUI <> :current_id
-          AND EXISTS (
-              SELECT 1
-              FROM RXNREL r
-              WHERE r.RELA = 'consists_of'
-                AND r.RXCUI2 = c.RXCUI
-                AND r.RXCUI1 IN :ing_list
-          )
-          AND NOT EXISTS (
-              SELECT 1
-              FROM (
-                  SELECT r2.RXCUI2 AS drug_rxcui
-                  FROM RXNREL r2
-                  WHERE r2.RELA = 'consists_of'
-                    AND r2.RXCUI1 IN :ing_list
-                  GROUP BY r2.RXCUI2
-                  HAVING COUNT(DISTINCT r2.RXCUI1) = :ing_count
-                     AND (
-                         SELECT COUNT(DISTINCT r3.RXCUI1)
-                         FROM RXNREL r3
-                         WHERE r3.RELA = 'consists_of'
-                           AND r3.RXCUI2 = r2.RXCUI2
-                     ) = :ing_count
-              ) exact
-              WHERE exact.drug_rxcui = c.RXCUI
-          )
-    """).bindparams(bindparam("ing_list", expanding=True))
-
-    with engine.connect() as conn:
-        res = pd.read_sql(
-            query,
-            conn,
-            params={
-                "current_id": current_id,
-                "ing_list": Ing_lst,
-                "ing_count": len(Ing_lst)
-            }
-        )
-
-    if not res.empty:
-        res = res[res['STR'].str.contains(r'\[.*\]', na=False)].copy()
-        res["Product_Name"] = res["STR"].str.extract(r'\[(.*?)\]')
-        res["Product_Name"] = res["Product_Name"].str.title()
-        res = res.drop_duplicates(subset=["Product_Name"])
-        res = res[res["Product_Name"].str.lower() != "generic"]
-        res.drop_duplicates(subset="RXCUI", inplace=True)
-        res.reset_index(drop=True, inplace=True)
-
+    has_bracket = dp.str.contains(r"\[", na=False)
+    
+    res["Product_Name"] = np.where(
+        has_bracket,
+        dp.str.rsplit("[", n=1).str[-1].str.rstrip("]"),
+        "Generic"
+    )
+    
+    keep_mask = (
+        has_bracket
+        & ~res["Product_Name"].str.lower().duplicated(keep="first")
+    )
+    
+    res = res.loc[keep_mask].reset_index(drop=True)
     return res
+
+def Union_Drugs(Ing_lst,ID):
+    s = ""
+    for i,j in enumerate(Ing_lst):
+        if i == (len(Ing_lst) - 1):
+            s+="r1.RXCUI1 = "+j
+        else:
+            s+="r1.RXCUI1 = "+j+" or "
+            
+    query = f"""
+    WITH base AS (
+        SELECT r2.RXCUI as ID, r2.STR as DP, r1.RXCUI1 as Ingredient_ID
+        FROM RXNREL r1
+        JOIN RXNCONSO r2
+        ON r1.RXCUI2 = r2.RXCUI
+        WHERE ({s}) and r2.TTY = "DP"
+    ),
+    keys_all AS (
+        SELECT ID
+        FROM base
+        GROUP by ID
+        HAVING COUNT(DISTINCT Ingredient_ID) < {len(Ing_lst)}
+    )
+    SELECT b.ID,b.DP
+    FROM base b
+    JOIN keys_all k
+    ON b.ID = k.ID
+    WHERE b.Id != {ID}
+    GROUP BY b.ID, b.DP
+    """
+    
+    res = pd.read_sql(query, engine)
+
+    dp = res["DP"].astype("string")
+    has_bracket = dp.str.contains(r"\[", na=False)
+    res["Product_Name"] = np.where(
+        has_bracket,
+        dp.str.rsplit("[", n=1).str[-1].str.rstrip("]"),
+        "Generic"
+    )
+    
+    res = res.loc[has_bracket].copy()
+    res = res.loc[~res["Product_Name"].str.lower().duplicated(keep="first")]
+    res = res.drop_duplicates(subset="ID", keep="first").reset_index(drop=True)
+    return res
+
+def Ing_count(ID):
+    query = f"""
+    SELECT count(c.STR) as Count
+    FROM RXNCONSO c
+    JOIN RXNREL r
+        ON c.RXCUI = r.RXCUI2
+    WHERE r.RXCUI1 = "{ID}"
+      AND c.TTY = "SCDC";
+    """
+    df = pd.read_sql(query, engine)
+    return int(df["Count"][0])
+
+def Fetch_Matches(exact_df, union_df, ID):
+    target_count = Ing_count(ID)
+
+    unique_ids = exact_df["ID"].dropna().unique()
+    count_map = {uid: Ing_count(uid) for uid in unique_ids}
+
+    mask = exact_df["ID"].map(count_map).eq(target_count)
+
+    union_df = pd.concat([union_df, exact_df.loc[~mask]], ignore_index=True)
+    exact_df = exact_df.loc[mask].copy()
+
+    return exact_df, union_df
 
 def extract_name(df):
     if df.empty:
@@ -170,8 +175,6 @@ def Fetch_Ingredients(ID):
                 "Concentration": 0.0 
             })
     return pd.DataFrame(parsed_data)
-
-
 
 def Fetch_Dose_Form(ID):
     query = text("SELECT c.STR FROM RXNCONSO c JOIN RXNREL r ON c.RXCUI = r.RXCUI2 WHERE r.RXCUI1 = :id AND c.TTY = 'DF'")

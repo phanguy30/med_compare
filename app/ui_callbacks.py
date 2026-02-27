@@ -8,8 +8,10 @@ from app.helpers import (
     Fetch_Ingredients,
     Fetch_Dose_Form,
     Fetch_Generic_Name,
-    Fetch_Exact_Drugs,
-    Fetch_Related_Drugs,
+    Exact_Drugs,
+    Union_Drugs,
+    Ing_count,
+    Fetch_Matches,
     Fetch_Heatmap,
     Create_Altair_Heatmap,
 )
@@ -26,12 +28,19 @@ def register_callbacks(app):
             return []
 
         df = Searchbar(search_value)
+
+        # Defensive: ensure expected cols exist
+        if df is None or df.empty:
+            return []
+
+        # Expecting at least: Product_Name and RXCUI
         return [
             {
                 "label": row["Product_Name"],
                 "value": f"{row['Product_Name']}|{row['RXCUI']}"
             }
             for _, row in df.iterrows()
+            if "Product_Name" in df.columns and "RXCUI" in df.columns
         ]
 
 
@@ -66,8 +75,8 @@ def register_callbacks(app):
         rxcui = stored_data["id"]
 
         ing_df = Fetch_Ingredients(rxcui)
-        ing_ids = ing_df["Ingredient_ID"].tolist() if not ing_df.empty else []
-        ing_names = ing_df["Ingredient"].tolist() if not ing_df.empty else []
+        ing_ids = ing_df["Ingredient_ID"].tolist() if ing_df is not None and not ing_df.empty else []
+        ing_names = ing_df["Ingredient"].tolist() if ing_df is not None and not ing_df.empty else []
 
         dose_form = Fetch_Dose_Form(rxcui)
         generic_full_name = Fetch_Generic_Name(rxcui)
@@ -79,7 +88,7 @@ def register_callbacks(app):
             html.P(html.Strong("Ingredients:")),
             html.Ul([
                 html.Li(f"{row['Ingredient']} ({row['Concentration']} MG)")
-                for _, row in ing_df.iterrows()
+                for _, row in (ing_df.iterrows() if ing_df is not None else [])
             ]),
             html.P([html.Strong("RXCUI:"), html.Code(rxcui)])
         ])
@@ -98,14 +107,15 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def display_exact_matches(ing_ids, ing_names, selected_drug):
-        if not ing_ids:
+        if not ing_ids or not selected_drug:
             return "No ingredients found."
 
-        df_matches = Fetch_Exact_Drugs(
+        # ✅ Replaced Fetch_Exact_Drugs with Exact_Drugs
+        df_matches = Exact_Drugs(
             ing_ids, ing_names, selected_drug["id"], selected_drug["name"]
         )
 
-        if df_matches.empty:
+        if df_matches is None or df_matches.empty:
             return html.P("No branded matches found.", className="text-muted")
 
         top_5 = df_matches.head(5)
@@ -153,10 +163,14 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def toggle_modal(n_open, n_close, is_open, ing_ids, ing_names, selected_drug):
-        trigger_id = ctx.triggered_id  # "open-modal" or "close-modal"
+        trigger_id = ctx.triggered_id
 
-        if trigger_id == "open-modal" and n_open:
-            df_full = Fetch_Exact_Drugs(ing_ids, ing_names, selected_drug["id"], selected_drug["name"])
+        if trigger_id == "open-modal" and n_open and ing_ids and selected_drug:
+            # ✅ Replaced Fetch_Exact_Drugs with Exact_Drugs
+            df_full = Exact_Drugs(ing_ids, ing_names, selected_drug["id"], selected_drug["name"])
+
+            if df_full is None or df_full.empty:
+                return True, html.P("No results.", className="text-muted")
 
             full_list = dbc.ListGroup(
                 [dbc.ListGroupItem(row["Product_Name"]) for _, row in df_full.iterrows()],
@@ -175,18 +189,35 @@ def register_callbacks(app):
         Output("heatmap-iframe", "srcDoc"),
         Input("ingredient-ids-store", "data"),
         State("selected-drug-store", "data"),
+        State("ingredient-names-store", "data"),
         prevent_initial_call=True
     )
-    def update_heatmap(ing_ids, selected_drug):
+    def update_heatmap(ing_ids, selected_drug, ing_names):
         if not ing_ids or not selected_drug:
             return ""
 
-        related_df = Fetch_Related_Drugs(ing_ids, selected_drug["id"])
+        # ✅ Replaced Fetch_Related_Drugs with Union_Drugs / Fetch_Matches (choose one)
+        # --- Recommended: use Union_Drugs as "related drugs" provider ---
+        related_df = Union_Drugs(ing_ids, ing_names, selected_drug["id"], selected_drug["name"])
 
-        if not related_df.empty:
-            related_df = related_df.rename(columns={"RXCUI": "ID"})
-        else:
+        # Optional: if Ing_count is meant to rank/enrich overlap info
+        # related_df = Ing_count(related_df, ing_names)
+
+        # If instead Fetch_Matches is what you want for related drugs, use this:
+        # related_df = Fetch_Matches(ing_ids, ing_names, selected_drug["id"], selected_drug["name"])
+
+        if related_df is None or related_df.empty:
             related_df = pd.DataFrame(columns=["ID", "Product_Name"])
+        else:
+            # Normalize RXCUI -> ID for Fetch_Heatmap
+            if "RXCUI" in related_df.columns and "ID" not in related_df.columns:
+                related_df = related_df.rename(columns={"RXCUI": "ID"})
+
+            # Ensure columns exist
+            if "Product_Name" not in related_df.columns:
+                # If your helper uses a different column name, map it here
+                # e.g., related_df = related_df.rename(columns={"STR": "Product_Name"})
+                pass
 
         heatmap_df = Fetch_Heatmap(
             related_df,
@@ -194,7 +225,7 @@ def register_callbacks(app):
             selected_drug["name"],
         )
 
-        if heatmap_df.empty:
+        if heatmap_df is None or heatmap_df.empty:
             return "<h4>No data available for heatmap</h4>"
 
         chart = Create_Altair_Heatmap(heatmap_df, selected_drug["id"])
