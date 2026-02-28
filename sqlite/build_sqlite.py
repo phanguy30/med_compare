@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text
 MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
 MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PSWD = os.getenv("MYSQL_PSWD", "")
+MYSQL_PSWD = os.getenv("MYSQL_PSWD", "2316")
 MYSQL_DB   = os.getenv("MYSQL_DB", "rxnorm")
 
 mysql_engine = create_engine(
