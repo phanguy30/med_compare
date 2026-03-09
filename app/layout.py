@@ -60,26 +60,28 @@ def create_layout():
 
 
         # =========================================================
-        # ROW 2: UMAP (left) + Bar Chart (right)
+        # ROW 2: LINKED UMAP + HEATMAP
         # =========================================================
         dbc.Row([
-
             dbc.Col([
-                html.H4("Drug Similarity (UMAP)"),
+                html.H4("Drug Similarity + Related Drugs Heatmap"),
                 html.Iframe(
-                    id="umap-iframe",
+                    id="linked-plot-iframe",
                     style={
                         "width": "100%",
-                        "height": "650px",
-                        "border": "none",
-                        "marginTop": "50px"   # <-- aligns with tab content
+                        "height": "900px",
+                        "border": "none"
                     }
                 ),
-            ], md=6),
+            ], md=12),
+        ], className="mb-4"),
 
+        # =========================================================
+        # ROW 3: BAR CHARTS
+        # =========================================================
+        dbc.Row([
             dbc.Col([
                 html.H4("Alternative Combinations Availability"),
-
                 dbc.Tabs([
                     dbc.Tab(
                         html.Iframe(
@@ -96,21 +98,6 @@ def create_layout():
                         label="Combination Frequency",
                     ),
                 ], className="mb-3"),
-
-            ], md=6)
-
-        ], className="mb-4"),
-
-        # =========================================================
-        # ROW 3: Heatmap (full width)
-        # =========================================================
-        dbc.Row([
-            dbc.Col([
-                html.H4("Related Drugs Heatmap"),
-                html.Iframe(
-                    id="heatmap-iframe",
-                    style={"width": "100%", "height": "700px", "border": "none"}
-                ),
             ], md=12),
         ], className="mb-4"),
 

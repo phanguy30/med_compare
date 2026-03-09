@@ -14,8 +14,7 @@ from app.helpers import (
     Union_Drugs,
     Fetch_Matches,
     Fetch_Heatmap,
-    Create_Altair_Heatmap,
-    Create_UMAP_Cluster,
+    Create_Interactive_UMAP_Heatmap,
     Create_Ingredient_Frequency_Bar
 )
 
@@ -268,51 +267,36 @@ def register_callbacks(app):
 
 
     # ------------------------------------------------------------
-    # 8) UMAP (FIRST) — from stored heatmap_df
+    # 8) LINKED UMAP + HEATMAP — from stored heatmap_df
     # ------------------------------------------------------------
     @app.callback(
-        Output("umap-iframe", "srcDoc"),
+        Output("linked-plot-iframe", "srcDoc"),
         [
             Input("heatmap-df-store", "data"),
             State("selected-drug-store", "data"),
         ],
         prevent_initial_call=True
     )
-    def update_umap(heatmap_records, selected_drug):
+    def update_linked_plot(heatmap_records, selected_drug):
         if not heatmap_records or not selected_drug:
-            return "<h4>No data available</h4>"
+            return "<h4>No data available for linked plot</h4>"
 
         heatmap_df = pd.DataFrame(heatmap_records)
 
-        chart = Create_UMAP_Cluster(
-            heatmap_df,
-            drug_of_interest_name=selected_drug["name"],
-            doseform_weight=2.0,
-            jitter_strength=0.15
+        if heatmap_df.empty:
+            return "<h4>No data available for linked plot</h4>"
+
+        chart = Create_Interactive_UMAP_Heatmap(
+            heatmap_df=heatmap_df,
+            drug_of_interest_id=str(selected_drug["id"]),
+            doseform_weight=2.0
         )
+
         return chart.to_html()
 
 
     # ------------------------------------------------------------
-    # 9) HEATMAP (SECOND) — from stored heatmap_df
-    # ------------------------------------------------------------
-    @app.callback(
-        Output("heatmap-iframe", "srcDoc"),
-        Input("heatmap-df-store", "data"),
-        State("selected-drug-store", "data"),
-        prevent_initial_call=True
-    )
-    def update_heatmap(heatmap_records, selected_drug):
-        if not heatmap_records or not selected_drug:
-            return "<h4>No data available for heatmap</h4>"
-
-        heatmap_df = pd.DataFrame(heatmap_records)
-        chart = Create_Altair_Heatmap(heatmap_df, str(selected_drug["id"]))
-        return chart.to_html()
-
-
-    # ------------------------------------------------------------
-    # 10) BAR (THIRD) — from stored heatmap_df
+    # 9) BAR (THIRD) — from stored heatmap_df
     # ------------------------------------------------------------
     @app.callback(
         Output("ingredient-bar-iframe", "srcDoc"),

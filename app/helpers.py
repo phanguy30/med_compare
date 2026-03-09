@@ -344,176 +344,21 @@ def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
     heatmap_df['Dose_Form'] = None
     return heatmap_df
 
-def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID', max_related=10):
 
-
-    if 'Product_Name' not in heatmap_df.columns:
-        heatmap_df = heatmap_df.reset_index()
-
-    heatmap_df = heatmap_df.copy()
-
-    if match_by == 'ID':
-        selected_id = str(drug_of_interest).strip()
-        heatmap_df['is_selected'] = heatmap_df['ID'].astype(str).str.strip().eq(selected_id)
-    elif match_by == 'Product_Name':
-        selected_name = str(drug_of_interest).strip().lower()
-        heatmap_df['is_selected'] = (
-            heatmap_df['Product_Name'].astype(str).str.strip().str.lower().eq(selected_name)
-        )
-    else:
-        raise ValueError('match_by must be "ID" or "Product_Name"')
-
-    if not heatmap_df['is_selected'].any():
-        return alt.Chart(pd.DataFrame({
-            'msg': [f'No match found for {match_by} = {drug_of_interest}. (No row highlighted)']
-        })).mark_text(size=14).encode(text='msg:N')
-
-    selected_df = heatmap_df.loc[heatmap_df['is_selected']].copy()
-
-    if max_related is not None:
-        other_df = heatmap_df.loc[~heatmap_df['is_selected']].copy().head(max_related)
-    else:
-        other_df = heatmap_df.loc[~heatmap_df['is_selected']].copy()
-
-    heatmap_df = pd.concat([selected_df, other_df], ignore_index=True)
-
-    heatmap_df = (
-        heatmap_df
-        .sort_values('is_selected', ascending=False)
-        .reset_index(drop=True)
-    )
-
-    highlight_title = heatmap_df.loc[heatmap_df['is_selected'], 'Product_Name'].iloc[0]
-
-    num_products = len(heatmap_df)
-    height_per_product = 28
-    dynamic_height = max(250, min(900, num_products * height_per_product))
-
-    non_ingredient_cols = {'Product_Name', 'Ingredients_List', 'ID', 'Dose_Form', 'is_selected'}
-    value_cols = [c for c in heatmap_df.columns if c not in non_ingredient_cols]
-
-    if len(value_cols) == 0:
-        return alt.Chart(pd.DataFrame({'msg': ['No ingredient data to plot.']})).mark_text(size=14).encode(text='msg:N')
-
-    df_long = heatmap_df.melt(
-        id_vars=['Product_Name', 'ID', 'is_selected'],
-        value_vars=value_cols,
-        var_name='Ingredient',
-        value_name='Concentration'
-    )
-
-    df_long['Product_Name'] = df_long['Product_Name'].astype(str)
-    df_long['Ingredient'] = df_long['Ingredient'].astype(str)
-    df_long['Concentration'] = pd.to_numeric(df_long['Concentration'], errors='coerce').fillna(0)
-
-    df_long['Relative_Conc'] = (
-        df_long.groupby('Ingredient')['Concentration']
-        .transform(lambda x: x / x.max() if x.max() != 0 else 0)
-    )
-
-    ingredients = sorted(df_long['Ingredient'].unique())
-    if len(ingredients) == 0:
-        return alt.Chart(pd.DataFrame({'msg': ['No data to plot.']})).mark_text(size=14).encode(text='msg:N')
-
-    product_order = heatmap_df['Product_Name'].tolist()
-
-    df_rows = heatmap_df[['Product_Name', 'is_selected']].drop_duplicates().copy()
-    df_rows['row_index'] = range(len(df_rows))
-    df_rows['is_odd'] = df_rows['row_index'] % 2 == 1
-    df_rows['x_start'] = ingredients[0]
-    df_rows['x_end'] = ingredients[-1]
-
-    base = alt.Chart(df_long).encode(
-        x=alt.X(
-            'Ingredient:N',
-            axis=alt.Axis(labelAngle=-45),
-            sort=ingredients,
-            scale=alt.Scale(padding=0)
-        ),
-        y=alt.Y('Product_Name:N', sort=product_order)
-    )
-
-    row_bands = alt.Chart(df_rows).mark_rect().encode(
-        x=alt.X('x_start:N', sort=ingredients, scale=alt.Scale(padding=0), title=None),
-        x2='x_end:N',
-        y=alt.Y('Product_Name:N', sort=product_order),
-        color=alt.condition(
-            alt.datum.is_odd,
-            alt.value('#f3f3f3'),
-            alt.value('white')
-        )
-    )
-
-    selected_row_band = alt.Chart(df_rows).transform_filter(
-        alt.datum.is_selected
-    ).mark_rect(
-        color='#cfe8ff',
-        opacity=0.45
-    ).encode(
-        x=alt.X('x_start:N', sort=ingredients, scale=alt.Scale(padding=0), title=None),
-        x2='x_end:N',
-        y=alt.Y('Product_Name:N', sort=product_order)
-    )
-
-    highlight_zeros = base.transform_filter(
-        alt.datum.is_selected & (alt.datum.Concentration == 0)
-    ).mark_rect().encode(
-        color=alt.value('#f8d7da')
-    )
-
-    nonzero_layer = base.transform_filter(
-        alt.datum.Concentration > 0
-    ).mark_rect().encode(
-        color=alt.Color(
-            'Relative_Conc:Q',
-            scale=alt.Scale(scheme='reds', domain=[0, 1]),
-            title='Relative Concentration'
-        ),
-        tooltip=[
-            alt.Tooltip('Product_Name:N', title='Product'),
-            alt.Tooltip('Ingredient:N', title='Ingredient'),
-            alt.Tooltip('Concentration:Q', title='Concentration (mg)'),
-            alt.Tooltip('Relative_Conc:Q', format='.2f', title='Relative')
-        ]
-    )
-
-    row_cell_outline = base.transform_filter(
-        alt.datum.is_selected
-    ).mark_rect(
-        fillOpacity=0,
-        stroke='#2b6cb0',
-        strokeWidth=2,
-        strokeOpacity=1
-    )
-
-    return (
-        row_bands +
-        selected_row_band +
-        highlight_zeros +
-        nonzero_layer +
-        row_cell_outline
-    ).properties(
-        width=1300,
-        height=dynamic_height,
-        title=f'Ingredient Concentration Heatmap (Highlighted: {highlight_title})'
-    ).configure_view(
-        fill='white',
-        strokeOpacity=0
-    ).configure(
-        background='white'
-    )
-
-def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, jitter_strength=0.15):
+def Build_UMAP_Data(heatmap_df, drug_of_interest_id=None, doseform_weight=2.0, jitter_strength=0.15):
     if heatmap_df is None:
-        raise ValueError('heatmap_df is None')
+        raise ValueError("heatmap_df is None")
     if heatmap_df.empty:
         raise ValueError("heatmap_df is EMPTY (0 rows). UMAP can't run.")
 
-    ignore_cols = {'Product_Name', 'Ingredients_List', 'ID', 'Dose_Form'}
-    ingredient_cols = [c for c in heatmap_df.columns if c not in ignore_cols]
+    df = heatmap_df.copy()
 
-    df_form = heatmap_df[['Dose_Form']].copy()
+    ignore_cols = {'Product_Name', 'Ingredients_List', 'ID', 'Dose_Form'}
+    ingredient_cols = [c for c in df.columns if c not in ignore_cols]
+
+    df_form = df[['Dose_Form']].copy()
     df_form['Dose_Form'] = df_form['Dose_Form'].fillna('UNKNOWN').astype(str)
+
     form_ohe = (
         pd.get_dummies(df_form['Dose_Form'], prefix='DF')
         .astype(np.float32) * np.float32(doseform_weight)
@@ -521,30 +366,27 @@ def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, 
 
     if len(ingredient_cols) > 0:
         X_ing = (
-            heatmap_df[ingredient_cols]
+            df[ingredient_cols]
             .apply(pd.to_numeric, errors='coerce')
             .fillna(0)
             .to_numpy(dtype=np.float32)
         )
     else:
-        X_ing = np.zeros((len(heatmap_df), 0), dtype=np.float32)
+        X_ing = np.zeros((len(df), 0), dtype=np.float32)
 
-    # Combine
     X = np.hstack([X_ing, form_ohe.to_numpy(dtype=np.float32)])
     X = np.ascontiguousarray(X, dtype=np.float32)
 
-    # Diagnostics (super important)
     n_samples, n_features = X.shape
-    print(f'DEBUG: n_samples={n_samples}, n_features={n_features}, ingredient_cols={len(ingredient_cols)}, doseform_cols={form_ohe.shape[1]}')
-    print('DEBUG: unique products =', heatmap_df['Product_Name'].nunique())
+    print(f"DEBUG: n_samples={n_samples}, n_features={n_features}, ingredient_cols={len(ingredient_cols)}, doseform_cols={form_ohe.shape[1]}")
 
-    # UMAP is unstable / can fail on very tiny datasets
     if n_samples < 3:
-        return alt.Chart(pd.DataFrame({
-            "msg": [f"Not enough products to compute UMAP similarity map (need at least 3, got {n_samples})."]
-        })).mark_text(size=16).encode(text="msg:N")
+        out = df[['ID', 'Product_Name', 'Ingredients_List', 'Dose_Form']].copy()
+        out['UMAP1'] = 0
+        out['UMAP2'] = 0
+        out['Is_Interest'] = out['ID'].astype(str).eq(str(drug_of_interest_id))
+        return out
 
-    # UMAP requires n_neighbors < n_samples
     n_neighbors = min(10, n_samples - 1)
     n_neighbors = max(2, n_neighbors)
 
@@ -560,37 +402,182 @@ def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, 
 
     embedding = reducer.fit_transform(X)
 
-    plot_df = heatmap_df[['Product_Name', 'Ingredients_List', 'Dose_Form']].copy()
-    plot_df['UMAP1'] = embedding[:, 0]
-    plot_df['UMAP2'] = embedding[:, 1]
-
-    plot_df['Ingredients_Str'] = plot_df['Ingredients_List'].apply(
-        lambda x: ', '.join(x) if isinstance(x, list) else str(x)
-    )
-
-    plot_df['Is_Interest'] = plot_df['Product_Name'].astype(str).str.lower().eq(str(drug_of_interest_name).lower())
+    out = df.copy()
+    out['UMAP1'] = embedding[:, 0]
+    out['UMAP2'] = embedding[:, 1]
 
     rng = np.random.default_rng(42)
-    plot_df['UMAP1_jitter'] = plot_df['UMAP1'] + rng.normal(0, jitter_strength, len(plot_df))
-    plot_df['UMAP2_jitter'] = plot_df['UMAP2'] + rng.normal(0, jitter_strength, len(plot_df))
+    out['UMAP1_jitter'] = out['UMAP1'] + rng.normal(0, jitter_strength, len(out))
+    out['UMAP2_jitter'] = out['UMAP2'] + rng.normal(0, jitter_strength, len(out))
 
-    chart = alt.Chart(plot_df).mark_circle(size=100).encode(
+    out['Ingredients_Str'] = out['Ingredients_List'].apply(
+        lambda x: ', '.join(x) if isinstance(x, list) else str(x)
+    )
+    out['Is_Interest'] = out['ID'].astype(str).eq(str(drug_of_interest_id))
+
+    return out
+
+def Create_Interactive_UMAP_Heatmap(heatmap_df, drug_of_interest_id=None, doseform_weight=2.0):
+    plot_df = Build_UMAP_Data(
+        heatmap_df=heatmap_df,
+        drug_of_interest_id=drug_of_interest_id,
+        doseform_weight=doseform_weight,
+        jitter_strength=0.15
+    )
+
+    if plot_df.empty:
+        return alt.Chart(pd.DataFrame({'msg': ['No data available.']})).mark_text(size=14).encode(text='msg:N')
+
+    non_ingredient_cols = {
+        'Product_Name', 'Ingredients_List', 'ID', 'Dose_Form',
+        'UMAP1', 'UMAP2', 'UMAP1_jitter', 'UMAP2_jitter',
+        'Ingredients_Str', 'Is_Interest'
+    }
+    ingredient_cols = [c for c in plot_df.columns if c not in non_ingredient_cols]
+
+    if len(ingredient_cols) == 0:
+        return alt.Chart(pd.DataFrame({'msg': ['No ingredient data to plot.']})).mark_text(size=14).encode(text='msg:N')
+
+    # selection: click point on UMAP
+    point_select = alt.selection_point(
+        fields=['ID'],
+        empty='all',
+        on='click',
+        clear='dblclick'
+    )
+
+    # zoom/pan for UMAP
+    zoom = alt.selection_interval(bind='scales')
+
+    # ----------------------------
+    # UMAP chart
+    # ----------------------------
+    base_points = alt.Chart(plot_df).mark_circle(
+        size=90,
+        color='steelblue',
+        opacity=0.8
+    ).encode(
         x=alt.X('UMAP1_jitter:Q', title='UMAP Dimension 1'),
         y=alt.Y('UMAP2_jitter:Q', title='UMAP Dimension 2'),
-        color=alt.condition(alt.datum.Is_Interest, alt.value('red'), alt.value('steelblue')),
-        size=alt.condition(alt.datum.Is_Interest, alt.value(220), alt.value(80)),
         tooltip=[
             alt.Tooltip('Product_Name:N', title='Product'),
+            alt.Tooltip('ID:N', title='ID'),
             alt.Tooltip('Dose_Form:N', title='Dose Form'),
             alt.Tooltip('Ingredients_Str:N', title='Ingredients')
         ]
-    ).properties(
-        width=650,
-        height=400,
-        title=f'Drug Similarity Clustering (UMAP) — DoseForm weighted x{doseform_weight}'
     )
 
-    return chart
+    interest_points = alt.Chart(plot_df).transform_filter(
+        alt.datum.Is_Interest
+    ).mark_circle(
+        size=180,
+        color='orange',
+        opacity=0.95
+    ).encode(
+        x='UMAP1_jitter:Q',
+        y='UMAP2_jitter:Q',
+        tooltip=[
+            alt.Tooltip('Product_Name:N', title='Product'),
+            alt.Tooltip('ID:N', title='ID'),
+            alt.Tooltip('Dose_Form:N', title='Dose Form'),
+            alt.Tooltip('Ingredients_Str:N', title='Ingredients')
+        ]
+    )
+
+    selected_points = alt.Chart(plot_df).transform_filter(
+        point_select
+    ).mark_circle(
+        size=260,
+        color='red',
+        opacity=1.0
+    ).encode(
+        x='UMAP1_jitter:Q',
+        y='UMAP2_jitter:Q',
+        tooltip=[
+            alt.Tooltip('Product_Name:N', title='Product'),
+            alt.Tooltip('ID:N', title='ID'),
+            alt.Tooltip('Dose_Form:N', title='Dose Form'),
+            alt.Tooltip('Ingredients_Str:N', title='Ingredients')
+        ]
+    )
+
+    umap_chart = (
+        (base_points + interest_points + selected_points)
+        .add_params(point_select, zoom)
+        .properties(
+            width=500,
+            height=400,
+            title=f'Drug Similarity Clustering (UMAP) — DoseForm weighted x{doseform_weight}'
+        )
+    )
+
+    # ----------------------------
+    # Heatmap long format
+    # ----------------------------
+    df_long = plot_df.melt(
+        id_vars=['Product_Name', 'ID', 'Is_Interest'],
+        value_vars=ingredient_cols,
+        var_name='Ingredient',
+        value_name='Concentration'
+    )
+
+    df_long['Concentration'] = pd.to_numeric(df_long['Concentration'], errors='coerce').fillna(0)
+
+    df_long['Relative_Conc'] = (
+        df_long.groupby('Ingredient')['Concentration']
+        .transform(lambda x: x / x.max() if x.max() != 0 else 0)
+    )
+
+    product_order = plot_df['Product_Name'].tolist()
+
+    heatmap = (
+        alt.Chart(df_long)
+        .transform_filter(point_select)
+        .mark_rect()
+        .encode(
+            x=alt.X('Ingredient:N', axis=alt.Axis(labelAngle=-45)),
+            y=alt.Y('Product_Name:N', sort=product_order),
+            color=alt.Color(
+                'Relative_Conc:Q',
+                scale=alt.Scale(scheme='reds', domain=[0, 1]),
+                title='Relative Concentration'
+            ),
+            tooltip=[
+                alt.Tooltip('Product_Name:N', title='Product'),
+                alt.Tooltip('ID:N', title='ID'),
+                alt.Tooltip('Ingredient:N', title='Ingredient'),
+                alt.Tooltip('Concentration:Q', title='Concentration (mg)'),
+                alt.Tooltip('Relative_Conc:Q', title='Relative', format='.2f')
+            ]
+        )
+        .properties(
+            width=800,
+            height=400,
+            title='Ingredient Concentration Heatmap (click point on UMAP)'
+        )
+    )
+
+    text_layer = (
+        alt.Chart(df_long)
+        .transform_filter(point_select)
+        .transform_filter(alt.datum.Concentration > 0)
+        .mark_text(fontSize=10)
+        .encode(
+            x='Ingredient:N',
+            y=alt.Y('Product_Name:N', sort=product_order),
+            text=alt.Text('Concentration:Q', format='.0f'),
+            color=alt.value('black')
+        )
+    )
+
+    return alt.hconcat(
+        umap_chart,
+        heatmap + text_layer
+    ).resolve_scale(
+        color='independent'
+    )
+
+
 def Create_Ingredient_Frequency_Bar(heatmap_df):
 
     # Identify ingredient columns
@@ -690,3 +677,6 @@ def Create_Ingredient_Combination_Frequency_Bar(heatmap_df):
     )
 
     return chart
+
+
+
