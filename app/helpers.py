@@ -1,5 +1,12 @@
-import dash
 import os
+os.environ["NUMBA_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+
+
+
+import dash
 from dash import dcc, html, dash_table
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -535,20 +542,25 @@ def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, 
     print(f'DEBUG: n_samples={n_samples}, n_features={n_features}, ingredient_cols={len(ingredient_cols)}, doseform_cols={form_ohe.shape[1]}')
     print('DEBUG: unique products =', heatmap_df['Product_Name'].nunique())
 
-    # If you end up with 0 rows or only 1 row, UMAP will fail
-    if n_samples < 2:
-        raise ValueError(f'UMAP needs at least 2 rows. You have {n_samples}. Your heatmap_df likely contains only {drug_of_interest_name}.')
+    # UMAP is unstable / can fail on very tiny datasets
+    if n_samples < 3:
+        return alt.Chart(pd.DataFrame({
+            "msg": [f"Not enough products to compute UMAP similarity map (need at least 3, got {n_samples})."]
+        })).mark_text(size=16).encode(text="msg:N")
 
     # UMAP requires n_neighbors < n_samples
     n_neighbors = min(10, n_samples - 1)
     n_neighbors = max(2, n_neighbors)
 
     reducer = umap.UMAP(
-        n_neighbors=n_neighbors,
-        min_dist=0.3,
-        n_components=2,
-        metric='euclidean',
-        random_state=42
+    n_neighbors=n_neighbors,
+    min_dist=0.3,
+    n_components=2,
+    metric='euclidean',
+    random_state=42,
+    low_memory=True,
+    n_jobs=1
+    
     )
     embedding = reducer.fit_transform(X)
 
