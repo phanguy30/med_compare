@@ -14,7 +14,7 @@ from app.helpers import (
     Union_Drugs,
     Fetch_Matches,
     Fetch_Heatmap,
-    Create_Interactive_UMAP_Heatmap,
+    Create_Linked_UMAP_Heatmap,
     Create_Ingredient_Frequency_Bar
 )
 
@@ -286,9 +286,10 @@ def register_callbacks(app):
         if heatmap_df.empty:
             return "<h4>No data available for linked plot</h4>"
 
-        chart = Create_Interactive_UMAP_Heatmap(
+        chart = Create_Linked_UMAP_Heatmap(
             heatmap_df=heatmap_df,
-            drug_of_interest_id=str(selected_drug["id"]),
+            drug_of_interest=str(selected_drug["id"]),
+            match_by="ID",
             doseform_weight=2.0
         )
 
