@@ -60,7 +60,7 @@ def create_layout():
         # =========================================================
         dbc.Row([
             dbc.Col([
-                html.H4("Visualization View", className="mb-3"),
+                html.H4("Similar Product Discovery", className="mb-3"),
                 dbc.RadioItems(
                     id="main-view-toggle",
                     className="btn-group",
@@ -90,7 +90,6 @@ def create_layout():
             children=[
                 dbc.Row([
                     dbc.Col([
-                        html.H4("Drug Similarity + Related Drugs Heatmap"),
                         html.Iframe(
                             id="linked-plot-iframe",
                             style={
@@ -113,7 +112,6 @@ def create_layout():
             children=[
                 dbc.Row([
                     dbc.Col([
-                        html.H4("Alternative Combinations Availability"),
                         dbc.Tabs([
                             dbc.Tab(
                                 html.Iframe(
