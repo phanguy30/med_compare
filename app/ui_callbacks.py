@@ -316,3 +316,14 @@ def register_callbacks(app):
         combination_chart = Create_Ingredient_Combination_Frequency_Bar(heatmap_df)
 
         return ingredient_chart.to_html(), combination_chart.to_html()
+
+
+    @app.callback(
+        Output("linked-plot-container", "style"),
+        Output("bar-charts-container", "style"),
+        Input("main-view-toggle", "value")
+    )
+    def toggle_main_view(selected_view):
+        if selected_view == "linked_plot":
+            return {"display": "block"}, {"display": "none"}
+        return {"display": "none"}, {"display": "block"}
