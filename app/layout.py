@@ -69,12 +69,26 @@ def create_layout():
             ], md=6),
 
             dbc.Col([
-                html.H4("Ingredient Frequency Bar Chart"),
-                html.Iframe(
-                    id="bar-iframe",
-                    style={"width": "100%", "height": "650px", "border": "none"}
-                ),
-            ], md=6),
+                html.H4("Alternative Combinations Availability"),
+
+                dbc.Tabs([
+                    dbc.Tab(
+                        html.Iframe(
+                            id="ingredient-bar-iframe",
+                            style={"width": "100%", "height": "650px", "border": "none"},
+                        ),
+                        label="Ingredient Frequency",
+                    ),
+                    dbc.Tab(
+                        html.Iframe(
+                            id="combination-bar-iframe",
+                            style={"width": "100%", "height": "650px", "border": "none"},
+                        ),
+                        label="Combination Frequency",
+                    ),
+                ], className="mb-3"),
+
+            ], md=6)
 
         ], className="mb-4"),
 

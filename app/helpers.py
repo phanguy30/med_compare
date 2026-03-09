@@ -643,3 +643,55 @@ def Create_Ingredient_Frequency_Bar(heatmap_df):
         title='Ingredient Frequency Across Products'
     )
     return chart
+
+
+
+def Create_Ingredient_Combination_Frequency_Bar(heatmap_df):
+
+    # Identify ingredient columns
+    ignore_cols = {'Product_Name', 'Ingredients_List', 'ID', 'Dose_Form'}
+    ingredient_cols = [c for c in heatmap_df.columns if c not in ignore_cols]
+
+    if len(ingredient_cols) == 0:
+        raise ValueError("No ingredient columns found.")
+
+    # Convert to binary presence matrix
+    binary_df = heatmap_df[ingredient_cols].gt(0)
+
+    # Build a canonical combination label for each product
+    combo_series = binary_df.apply(
+        lambda row: " + ".join(sorted(row.index[row].tolist())) if row.any() else "No Ingredient",
+        axis=1
+    )
+
+    # Count frequency of each combination
+    combo_freq = combo_series.value_counts().reset_index()
+    combo_freq.columns = ['Ingredient_Combination', 'Product_Count']
+
+    # Create bar chart
+    chart = alt.Chart(combo_freq).mark_bar().encode(
+        x=alt.X(
+            'Product_Count:Q',
+            title='Number of Products'
+        ),
+        y=alt.Y(
+            'Ingredient_Combination:N',
+            sort='-x',
+            title='Ingredient Combination'
+        ),
+        color=alt.Color(
+            'Product_Count:Q',
+            scale=alt.Scale(scheme='reds'),
+            title='Frequency'
+        ),
+        tooltip=[
+            alt.Tooltip('Ingredient_Combination:N', title='Combination'),
+            alt.Tooltip('Product_Count:Q', title='Products with combination')
+        ]
+    ).properties(
+        width=650,
+        height=400,
+        title='Ingredient Combination Frequency Across Products'
+    )
+
+    return chart

@@ -5,6 +5,7 @@ import pandas as pd
 import umap
 
 from app.helpers import (
+    Create_Ingredient_Combination_Frequency_Bar,
     Searchbar,
     Fetch_Ingredients,
     Fetch_Dose_Form,
@@ -15,7 +16,7 @@ from app.helpers import (
     Fetch_Heatmap,
     Create_Altair_Heatmap,
     Create_UMAP_Cluster,
-    Create_Ingredient_Frequency_Bar,
+    Create_Ingredient_Frequency_Bar
 )
 
 def _to_str_id_list(lst):
@@ -314,14 +315,19 @@ def register_callbacks(app):
     # 10) BAR (THIRD) — from stored heatmap_df
     # ------------------------------------------------------------
     @app.callback(
-        Output("bar-iframe", "srcDoc"),
+        Output("ingredient-bar-iframe", "srcDoc"),
+        Output("combination-bar-iframe", "srcDoc"),
         Input("heatmap-df-store", "data"),
         prevent_initial_call=True
     )
     def update_bar(heatmap_records):
         if not heatmap_records:
-            return "<h4>No data available</h4>"
+            msg = "<h4>No data available</h4>"
+            return msg, msg
 
         heatmap_df = pd.DataFrame(heatmap_records)
-        chart = Create_Ingredient_Frequency_Bar(heatmap_df)
-        return chart.to_html()
+
+        ingredient_chart = Create_Ingredient_Frequency_Bar(heatmap_df)
+        combination_chart = Create_Ingredient_Combination_Frequency_Bar(heatmap_df)
+
+        return ingredient_chart.to_html(), combination_chart.to_html()
