@@ -519,20 +519,24 @@ def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, 
 
     df_form = heatmap_df[['Dose_Form']].copy()
     df_form['Dose_Form'] = df_form['Dose_Form'].fillna('UNKNOWN').astype(str)
-    form_ohe = pd.get_dummies(df_form['Dose_Form'], prefix='DF').astype(float) * float(doseform_weight)
+    form_ohe = (
+        pd.get_dummies(df_form['Dose_Form'], prefix='DF')
+        .astype(np.float32) * np.float32(doseform_weight)
+    )
 
     if len(ingredient_cols) > 0:
         X_ing = (
             heatmap_df[ingredient_cols]
             .apply(pd.to_numeric, errors='coerce')
             .fillna(0)
-            .to_numpy(dtype=float)
+            .to_numpy(dtype=np.float32)
         )
     else:
-        X_ing = np.zeros((len(heatmap_df), 0), dtype=float)
+        X_ing = np.zeros((len(heatmap_df), 0), dtype=np.float32)
 
     # Combine
-    X = np.hstack([X_ing, form_ohe.to_numpy(dtype=float)])
+    X = np.hstack([X_ing, form_ohe.to_numpy(dtype=np.float32)])
+    X = np.ascontiguousarray(X, dtype=np.float32)
 
     # Diagnostics (super important)
     n_samples, n_features = X.shape
@@ -550,15 +554,15 @@ def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, 
     n_neighbors = max(2, n_neighbors)
 
     reducer = umap.UMAP(
-    n_neighbors=n_neighbors,
-    min_dist=0.3,
-    n_components=2,
-    metric='euclidean',
-    random_state=42,
-    low_memory=True,
-    n_jobs=1
-    
+        n_neighbors=n_neighbors,
+        min_dist=0.3,
+        n_components=2,
+        metric='euclidean',
+        random_state=42,
+        low_memory=True,
+        n_jobs=1
     )
+
     embedding = reducer.fit_transform(X)
 
     plot_df = heatmap_df[['Product_Name', 'Ingredients_List', 'Dose_Form']].copy()
@@ -592,7 +596,6 @@ def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, 
     )
 
     return chart
-
 def Create_Ingredient_Frequency_Bar(heatmap_df):
 
     # Identify ingredient columns
