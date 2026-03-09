@@ -21,6 +21,7 @@ from app.chart_helper import (
     _add_embedding_columns,
     _make_default_heatmap_subset,
     _get_value_cols,
+    _prepare_brushed_heatmap_input,
     _prepare_long_heatmap_df,
     _prepare_default_row_bands,
     _prepare_brushed_row_bands,
@@ -533,7 +534,9 @@ def Create_Linked_UMAP_Heatmap(
         seed=42
     )
 
-    value_cols = _get_value_cols(plot_df)
+    brushed_source_df = _prepare_brushed_heatmap_input(plot_df)
+
+    value_cols = _get_value_cols(brushed_source_df)
     brush = _build_brush()
     no_brush = "!length(data('brush_store'))"
     has_brush = "length(data('brush_store'))"
@@ -564,12 +567,15 @@ def Create_Linked_UMAP_Heatmap(
     df_rows_default = _prepare_default_row_bands(heatmap_subset, default_ingredients)
 
     df_long_brushed = _prepare_long_heatmap_df(
-        plot_df,
+        brushed_source_df,
         value_cols=value_cols,
-        id_vars=['Product_Name', 'ID', 'is_selected', 'UMAP1_jitter', 'UMAP2_jitter']
+        id_vars=[
+            'Product_Name', 'ID', 'is_selected',
+            'UMAP1_jitter', 'UMAP2_jitter', 'sort_key'
+        ]
     )
     brushed_ingredients = sorted(df_long_brushed['Ingredient'].unique())
-    df_rows_brushed = _prepare_brushed_row_bands(plot_df, brushed_ingredients)
+    df_rows_brushed = _prepare_brushed_row_bands(brushed_source_df, brushed_ingredients)
 
     default_layers = _build_default_heatmap_layers(
         df_long_default=df_long_default,

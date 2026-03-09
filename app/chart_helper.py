@@ -12,6 +12,7 @@ import numpy as np
 import umap
 from difflib import get_close_matches
 
+
 def _message_chart(msg, size=14):
     """Return a simple text chart for empty/error states."""
     return alt.Chart(pd.DataFrame({'msg': [msg]})).mark_text(size=size).encode(
@@ -152,7 +153,8 @@ def _get_value_cols(plot_df):
     """Return ingredient/value columns used in the heatmap."""
     non_ingredient_cols = {
         'Product_Name', 'Ingredients_List', 'ID', 'Dose_Form', 'is_selected',
-        'UMAP1', 'UMAP2', 'Ingredients_Str', 'UMAP1_jitter', 'UMAP2_jitter'
+        'UMAP1', 'UMAP2', 'Ingredients_Str', 'UMAP1_jitter', 'UMAP2_jitter',
+        'sort_key'
     }
     return [c for c in plot_df.columns if c not in non_ingredient_cols]
 
@@ -182,6 +184,16 @@ def _prepare_long_heatmap_df(df, value_cols, id_vars):
     return df_long
 
 
+def _prepare_brushed_heatmap_input(plot_df):
+    """
+    Create brushed heatmap source data such that:
+    - the selected drug is always ordered first
+    """
+    df = plot_df.copy()
+    df['sort_key'] = np.where(df['is_selected'], 0, 1)
+    return df
+
+
 def _prepare_default_row_bands(heatmap_subset, ingredients):
     """Prepare row-band dataframe for default heatmap."""
     df_rows = heatmap_subset[['Product_Name', 'ID', 'is_selected']].drop_duplicates().copy()
@@ -195,10 +207,19 @@ def _prepare_default_row_bands(heatmap_subset, ingredients):
 def _prepare_brushed_row_bands(plot_df, ingredients):
     """Prepare row-band dataframe for brushed heatmap."""
     df_rows = plot_df[
-        ['Product_Name', 'ID', 'is_selected', 'UMAP1_jitter', 'UMAP2_jitter']
+        ['Product_Name', 'ID', 'is_selected', 'UMAP1_jitter', 'UMAP2_jitter', 'sort_key']
     ].drop_duplicates().copy()
+
+    df_rows = df_rows.sort_values(
+        ['sort_key', 'Product_Name'],
+        ascending=[True, True]
+    ).reset_index(drop=True)
+
+    df_rows['row_index'] = range(len(df_rows))
+    df_rows['is_odd'] = df_rows['row_index'] % 2 == 1
     df_rows['x_start'] = ingredients[0]
     df_rows['x_end'] = ingredients[-1]
+
     return df_rows
 
 
@@ -356,7 +377,10 @@ def _build_brushed_heatmap_layers(
     has_brush
 ):
     """Build brushed heatmap layers shown when UMAP brush is active."""
-    base = alt.Chart(df_long_brushed).transform_filter(
+    y_sort = alt.SortField(field='sort_key', order='ascending')
+
+    # Brushed rows
+    base_brushed = alt.Chart(df_long_brushed).transform_filter(
         has_brush
     ).transform_filter(
         brush
@@ -367,21 +391,38 @@ def _build_brushed_heatmap_layers(
             sort=brushed_ingredients,
             scale=alt.Scale(padding=0)
         ),
-        y=alt.Y('Product_Name:N')
+        y=alt.Y('Product_Name:N', sort=y_sort)
     )
 
-    row_bands = alt.Chart(df_rows_brushed).transform_filter(
+    # Selected row always included when brush is active
+    base_selected = alt.Chart(df_long_brushed).transform_filter(
+        has_brush
+    ).transform_filter(
+        alt.datum.is_selected
+    ).encode(
+        x=alt.X(
+            'Ingredient:N',
+            axis=alt.Axis(labelAngle=-45),
+            sort=brushed_ingredients,
+            scale=alt.Scale(padding=0)
+        ),
+        y=alt.Y('Product_Name:N', sort=y_sort)
+    )
+
+    # Row bands for brushed rows
+    row_bands_brushed = alt.Chart(df_rows_brushed).transform_filter(
         has_brush
     ).transform_filter(
         brush
-    ).transform_window(
-        row_index='row_number()'
-    ).transform_calculate(
-        is_odd='datum.row_index % 2'
     ).mark_rect().encode(
-        x=alt.X('x_start:N', sort=brushed_ingredients, scale=alt.Scale(padding=0), title=None),
+        x=alt.X(
+            'x_start:N',
+            sort=brushed_ingredients,
+            scale=alt.Scale(padding=0),
+            title=None
+        ),
         x2='x_end:N',
-        y=alt.Y('Product_Name:N'),
+        y=alt.Y('Product_Name:N', sort=y_sort),
         color=alt.condition(
             alt.datum.is_odd,
             alt.value('#f3f3f3'),
@@ -389,13 +430,33 @@ def _build_brushed_heatmap_layers(
         )
     )
 
-    zero_layer = base.transform_filter(
+    # Blue row band for selected drug
+    selected_row_band = alt.Chart(df_rows_brushed).transform_filter(
+        has_brush
+    ).transform_filter(
+        alt.datum.is_selected
+    ).mark_rect(
+        color='#cfe8ff',
+        opacity=0.45
+    ).encode(
+        x=alt.X(
+            'x_start:N',
+            sort=brushed_ingredients,
+            scale=alt.Scale(padding=0),
+            title=None
+        ),
+        x2='x_end:N',
+        y=alt.Y('Product_Name:N', sort=y_sort)
+    )
+
+    # Brushed non-selected rows
+    zero_layer_brushed = base_brushed.transform_filter(
         alt.datum.Concentration == 0
     ).mark_rect().encode(
         color=alt.value('#f8d7da')
     )
 
-    nonzero_layer = base.transform_filter(
+    nonzero_layer_brushed = base_brushed.transform_filter(
         alt.datum.Concentration > 0
     ).mark_rect().encode(
         color=alt.Color(
@@ -412,18 +473,69 @@ def _build_brushed_heatmap_layers(
         ]
     )
 
-    outline = base.mark_rect(
+    brushed_outline = base_brushed.transform_filter(
+        ~alt.datum.is_selected
+    ).mark_rect(
         fillOpacity=0,
         stroke='red',
-        strokeWidth=2.5,
+        strokeWidth=2.0,
         strokeOpacity=1
     )
 
-    text = base.transform_filter(
+    text_brushed = base_brushed.transform_filter(
         alt.datum.Concentration > 0
     ).mark_text(fontSize=10).encode(
         text=alt.Text('Concentration:Q', format='.0f'),
         color=alt.value('black')
     )
 
-    return row_bands + zero_layer + nonzero_layer + outline + text
+    # Selected row overlay
+    zero_layer_selected = base_selected.transform_filter(
+        alt.datum.Concentration == 0
+    ).mark_rect().encode(
+        color=alt.value('#f8d7da')
+    )
+
+    nonzero_layer_selected = base_selected.transform_filter(
+        alt.datum.Concentration > 0
+    ).mark_rect().encode(
+        color=alt.Color(
+            'Relative_Conc:Q',
+            scale=alt.Scale(scheme='reds', domain=[0, 1]),
+            title='Relative Concentration'
+        ),
+        tooltip=[
+            alt.Tooltip('Product_Name:N', title='Product'),
+            alt.Tooltip('ID:N', title='ID'),
+            alt.Tooltip('Ingredient:N', title='Ingredient'),
+            alt.Tooltip('Concentration:Q', title='Concentration (mg)'),
+            alt.Tooltip('Relative_Conc:Q', format='.2f', title='Relative')
+        ]
+    )
+
+    selected_outline = base_selected.mark_rect(
+        fillOpacity=0,
+        stroke='#2b6cb0',
+        strokeWidth=2.5,
+        strokeOpacity=1
+    )
+
+    text_selected = base_selected.transform_filter(
+        alt.datum.Concentration > 0
+    ).mark_text(fontSize=10).encode(
+        text=alt.Text('Concentration:Q', format='.0f'),
+        color=alt.value('black')
+    )
+
+    return (
+        row_bands_brushed
+        + selected_row_band
+        + zero_layer_brushed
+        + nonzero_layer_brushed
+        + brushed_outline
+        + text_brushed
+        + zero_layer_selected
+        + nonzero_layer_selected
+        + selected_outline
+        + text_selected
+    )
