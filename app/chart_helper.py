@@ -12,6 +12,8 @@ import numpy as np
 import umap
 from difflib import get_close_matches
 
+alt.data_transformers.disable_max_rows()
+
 
 def _message_chart(msg, size=14):
     """Return a simple text chart for empty/error states."""

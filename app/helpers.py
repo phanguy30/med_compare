@@ -31,6 +31,8 @@ from app.chart_helper import (
     _build_brushed_heatmap_layers,
 )
 
+alt.data_transformers.disable_max_rows()
+
 
 # SQLite Engine
 engine = create_engine(
