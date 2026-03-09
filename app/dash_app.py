@@ -9,6 +9,8 @@ app = Dash(
     suppress_callback_exceptions=True
 )
 
+server = app.server
+
 
 app.layout = create_layout()
 
