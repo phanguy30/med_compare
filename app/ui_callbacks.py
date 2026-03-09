@@ -27,38 +27,59 @@ def register_callbacks(app):
     # 1) SEARCH DROPDOWN OPTIONS
     # ------------------------------------------------------------
     @app.callback(
-        Output("drug-search-dropdown", "options"),
-        Input("drug-search-dropdown", "search_value")
+    Output("drug-search-dropdown", "options"),
+    Input("drug-search-dropdown", "search_value"),
+    State("drug-search-dropdown", "value")
     )
-    def update_options(search_value):
-        if not search_value or len(search_value) < 3:
-            return []
+    def update_options(search_value, current_value):
+        options = []
 
-        df = Searchbar(search_value)
-        if df is None or df.empty:
-            return []
+        if search_value and len(search_value) >= 3:
+            df = Searchbar(search_value)
 
-        if "Product_Name" not in df.columns or "RXCUI" not in df.columns:
-            return []
+            if (
+                df is not None
+                and not df.empty
+                and "Product_Name" in df.columns
+                and "RXCUI" in df.columns
+            ):
+                options = [
+                    {
+                        "label": row["Product_Name"],
+                        "value": f"{row['Product_Name']}|{row['RXCUI']}"
+                    }
+                    for _, row in df.iterrows()
+                ]
 
-        return [
-            {"label": row["Product_Name"], "value": f"{row['Product_Name']}|{row['RXCUI']}"}
-            for _, row in df.iterrows()
-        ]
+        # Keep the selected value in options so Dash does not clear it
+        if current_value and all(opt["value"] != current_value for opt in options):
+            try:
+                name, rxcui = current_value.split("|", 1)
+                options = [{"label": name, "value": current_value}] + options
+            except ValueError:
+                pass
+
+        return options
 
 
     # ------------------------------------------------------------
     # 2) SAVE SELECTED DRUG
     # ------------------------------------------------------------
     @app.callback(
-        Output("selected-drug-store", "data"),
-        Input("drug-search-dropdown", "value"),
-        prevent_initial_call=True
+    Output("selected-drug-store", "data"),
+    Input("drug-search-dropdown", "value"),
+    State("selected-drug-store", "data"),
+    prevent_initial_call=True
     )
-    def save_selection(selected_value):
+    def save_selection(selected_value, current_store):
         if not selected_value:
-            return None
-        name, rxcui = selected_value.split("|")
+            return current_store
+
+        try:
+            name, rxcui = selected_value.split("|", 1)
+        except ValueError:
+            return current_store
+
         return {"id": str(rxcui), "name": name}
 
 
