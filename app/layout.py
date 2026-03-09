@@ -29,13 +29,17 @@ def create_layout():
         # ROW 1: Drug Info (left) + Exact Matches (right)
         # =========================================================
         dbc.Row([
-
-            # LEFT: Drug Info
             dbc.Col([
-                html.H4("Drug Information"),
-                html.Div(id="drug-info-content"),
-            ], md=6),
+                html.H4("Drug Information", className="mb-3"),
 
+                dbc.Card(
+                    dbc.CardBody(
+                        html.Div(id="drug-info-content")
+                    ),
+                    className="shadow-sm"
+                ),
+
+            ], md=6),
             # RIGHT: Exact Matches
             dbc.Col([
                 html.H4("Exact Matches"),
@@ -64,7 +68,12 @@ def create_layout():
                 html.H4("Drug Similarity (UMAP)"),
                 html.Iframe(
                     id="umap-iframe",
-                    style={"width": "100%", "height": "650px", "border": "none"}
+                    style={
+                        "width": "100%",
+                        "height": "650px",
+                        "border": "none",
+                        "marginTop": "50px"   # <-- aligns with tab content
+                    }
                 ),
             ], md=6),
 
@@ -75,14 +84,14 @@ def create_layout():
                     dbc.Tab(
                         html.Iframe(
                             id="ingredient-bar-iframe",
-                            style={"width": "100%", "height": "650px", "border": "none"},
+                            style={"width": "100%", "height": "500px", "border": "none"},
                         ),
                         label="Ingredient Frequency",
                     ),
                     dbc.Tab(
                         html.Iframe(
                             id="combination-bar-iframe",
-                            style={"width": "100%", "height": "650px", "border": "none"},
+                            style={"width": "100%", "height": "500px", "border": "none"},
                         ),
                         label="Combination Frequency",
                     ),
@@ -91,7 +100,6 @@ def create_layout():
             ], md=6)
 
         ], className="mb-4"),
-
 
         # =========================================================
         # ROW 3: Heatmap (full width)

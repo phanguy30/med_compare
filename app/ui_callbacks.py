@@ -110,7 +110,7 @@ def register_callbacks(app):
         generic_full_name = Fetch_Generic_Name(rxcui)
 
         layout = html.Div([
-            html.H4(stored_data["name"], className="text-primary mb-3"),
+            html.H5(stored_data["name"], className="text-primary mb-3"),
             html.P([html.Strong("Generic Formula:"), html.Br(), html.Small(generic_full_name)]),
             html.P([html.Strong("Dose Form:"), dose_form]),
             html.P(html.Strong("Ingredients:")),

@@ -247,6 +247,7 @@ def Fetch_Generic_Name(ID):
         res = pd.read_sql(query, conn, params={'id': ID})
     return res['STR'].iloc[0] if not res.empty else 'N/A'
 
+
 def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
 
     searched_row = pd.DataFrame({
@@ -343,31 +344,59 @@ def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
     heatmap_df['Dose_Form'] = None
     return heatmap_df
 
-def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID'):
-    """
-    drug_of_interest:
-      - if match_by='ID': pass the numeric/string ID value
-      - if match_by='Product_Name': pass the full product name (not truncated)
-    """
+def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID', max_related=10):
 
-    import pandas as pd
-    import altair as alt
 
     if 'Product_Name' not in heatmap_df.columns:
         heatmap_df = heatmap_df.reset_index()
 
-    # ---- Dynamic height ----
-    num_products = heatmap_df['Product_Name'].nunique()
-    height_per_product = 20
-    dynamic_height = max(250, min(1400, num_products * height_per_product))
+    heatmap_df = heatmap_df.copy()
 
-    # ---- Ingredient columns ----
-    non_ingredient_cols = {'Product_Name', 'Ingredients_List', 'ID', 'Dose_Form'}
+    if match_by == 'ID':
+        selected_id = str(drug_of_interest).strip()
+        heatmap_df['is_selected'] = heatmap_df['ID'].astype(str).str.strip().eq(selected_id)
+    elif match_by == 'Product_Name':
+        selected_name = str(drug_of_interest).strip().lower()
+        heatmap_df['is_selected'] = (
+            heatmap_df['Product_Name'].astype(str).str.strip().str.lower().eq(selected_name)
+        )
+    else:
+        raise ValueError('match_by must be "ID" or "Product_Name"')
+
+    if not heatmap_df['is_selected'].any():
+        return alt.Chart(pd.DataFrame({
+            'msg': [f'No match found for {match_by} = {drug_of_interest}. (No row highlighted)']
+        })).mark_text(size=14).encode(text='msg:N')
+
+    selected_df = heatmap_df.loc[heatmap_df['is_selected']].copy()
+
+    if max_related is not None:
+        other_df = heatmap_df.loc[~heatmap_df['is_selected']].copy().head(max_related)
+    else:
+        other_df = heatmap_df.loc[~heatmap_df['is_selected']].copy()
+
+    heatmap_df = pd.concat([selected_df, other_df], ignore_index=True)
+
+    heatmap_df = (
+        heatmap_df
+        .sort_values('is_selected', ascending=False)
+        .reset_index(drop=True)
+    )
+
+    highlight_title = heatmap_df.loc[heatmap_df['is_selected'], 'Product_Name'].iloc[0]
+
+    num_products = len(heatmap_df)
+    height_per_product = 28
+    dynamic_height = max(250, min(900, num_products * height_per_product))
+
+    non_ingredient_cols = {'Product_Name', 'Ingredients_List', 'ID', 'Dose_Form', 'is_selected'}
     value_cols = [c for c in heatmap_df.columns if c not in non_ingredient_cols]
 
-    # ---- Long format ----
+    if len(value_cols) == 0:
+        return alt.Chart(pd.DataFrame({'msg': ['No ingredient data to plot.']})).mark_text(size=14).encode(text='msg:N')
+
     df_long = heatmap_df.melt(
-        id_vars=['Product_Name', 'ID'],
+        id_vars=['Product_Name', 'ID', 'is_selected'],
         value_vars=value_cols,
         var_name='Ingredient',
         value_name='Concentration'
@@ -377,29 +406,6 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID'):
     df_long['Ingredient'] = df_long['Ingredient'].astype(str)
     df_long['Concentration'] = pd.to_numeric(df_long['Concentration'], errors='coerce').fillna(0)
 
-    # ---- Selected flag (NO fuzzy match) ----
-    if match_by == 'ID':
-        selected_id = str(drug_of_interest).strip()
-        df_long['ID_str'] = df_long['ID'].astype(str).str.strip()
-        df_long['is_selected'] = df_long['ID_str'].eq(selected_id)
-        highlight_title = df_long.loc[df_long['is_selected'], 'Product_Name'].iloc[0] if df_long['is_selected'].any() else f'ID={selected_id}'
-
-    elif match_by == 'Product_Name':
-        selected_name = str(drug_of_interest).strip().lower()
-        df_long['Product_Name_norm'] = df_long['Product_Name'].str.strip().str.lower()
-        df_long['is_selected'] = df_long['Product_Name_norm'].eq(selected_name)
-        highlight_title = drug_of_interest
-
-    else:
-        raise ValueError('match_by must be "ID" or "Product_Name"')
-
-    # If nothing matched, show message (so you immediately know why)
-    if not df_long['is_selected'].any():
-        return alt.Chart(pd.DataFrame({
-            'msg': [f'No match found for {match_by} = {drug_of_interest}. (No row highlighted)']
-        })).mark_text(size=14).encode(text='msg:N')
-
-    # ---- Relative concentration per ingredient ----
     df_long['Relative_Conc'] = (
         df_long.groupby('Ingredient')['Concentration']
         .transform(lambda x: x / x.max() if x.max() != 0 else 0)
@@ -407,17 +413,13 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID'):
 
     ingredients = sorted(df_long['Ingredient'].unique())
     if len(ingredients) == 0:
-        return alt.Chart(pd.DataFrame({'msg': ['No data to plot.']})).mark_text().encode(text='msg:N')
+        return alt.Chart(pd.DataFrame({'msg': ['No data to plot.']})).mark_text(size=14).encode(text='msg:N')
 
-    # ---- Row helper for zebra + selected band ----
-    df_rows = (
-        df_long[['Product_Name', 'is_selected']]
-        .drop_duplicates()
-        .sort_values('Product_Name')
-        .reset_index(drop=True)
-    )
-    df_rows['row_index'] = df_rows.index
-    df_rows['is_odd'] = (df_rows['row_index'] % 2 == 1)
+    product_order = heatmap_df['Product_Name'].tolist()
+
+    df_rows = heatmap_df[['Product_Name', 'is_selected']].drop_duplicates().copy()
+    df_rows['row_index'] = range(len(df_rows))
+    df_rows['is_odd'] = df_rows['row_index'] % 2 == 1
     df_rows['x_start'] = ingredients[0]
     df_rows['x_end'] = ingredients[-1]
 
@@ -428,14 +430,13 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID'):
             sort=ingredients,
             scale=alt.Scale(padding=0)
         ),
-        y=alt.Y('Product_Name:N', sort='-x')
+        y=alt.Y('Product_Name:N', sort=product_order)
     )
 
-    # Zebra bands
     row_bands = alt.Chart(df_rows).mark_rect().encode(
         x=alt.X('x_start:N', sort=ingredients, scale=alt.Scale(padding=0), title=None),
         x2='x_end:N',
-        y=alt.Y('Product_Name:N', sort='-x'),
+        y=alt.Y('Product_Name:N', sort=product_order),
         color=alt.condition(
             alt.datum.is_odd,
             alt.value('#f3f3f3'),
@@ -443,7 +444,6 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID'):
         )
     )
 
-    # Strong selected row band
     selected_row_band = alt.Chart(df_rows).transform_filter(
         alt.datum.is_selected
     ).mark_rect(
@@ -452,17 +452,15 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID'):
     ).encode(
         x=alt.X('x_start:N', sort=ingredients, scale=alt.Scale(padding=0), title=None),
         x2='x_end:N',
-        y=alt.Y('Product_Name:N', sort='-x')
+        y=alt.Y('Product_Name:N', sort=product_order)
     )
 
-    # Zero cells highlight only for selected row
     highlight_zeros = base.transform_filter(
         alt.datum.is_selected & (alt.datum.Concentration == 0)
     ).mark_rect().encode(
         color=alt.value('#f8d7da')
     )
 
-    # Main heatmap (non-zero)
     nonzero_layer = base.transform_filter(
         alt.datum.Concentration > 0
     ).mark_rect().encode(
@@ -472,14 +470,13 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID'):
             title='Relative Concentration'
         ),
         tooltip=[
-            'Product_Name:N',
-            'Ingredient:N',
+            alt.Tooltip('Product_Name:N', title='Product'),
+            alt.Tooltip('Ingredient:N', title='Ingredient'),
             alt.Tooltip('Concentration:Q', title='Concentration (mg)'),
             alt.Tooltip('Relative_Conc:Q', format='.2f', title='Relative')
         ]
     )
 
-    # Outline each cell in selected row
     row_cell_outline = base.transform_filter(
         alt.datum.is_selected
     ).mark_rect(
@@ -489,7 +486,7 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID'):
         strokeOpacity=1
     )
 
-    chart = (
+    return (
         row_bands +
         selected_row_band +
         highlight_zeros +
@@ -505,8 +502,6 @@ def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID'):
     ).configure(
         background='white'
     )
-
-    return chart
 
 def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, jitter_strength=0.15):
     if heatmap_df is None:
