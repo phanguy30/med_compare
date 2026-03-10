@@ -248,11 +248,27 @@ def Fetch_Ingredients(ID):
 
 def Fetch_Dose_Form(ID):
     query = text("""
-        SELECT c.STR FROM RXNCONSO c JOIN RXNREL r ON c.RXCUI = r.RXCUI2 WHERE r.RXCUI1 = :id AND c.TTY = 'DF'
+        SELECT c.STR
+        FROM RXNCONSO c
+        JOIN RXNREL r
+            ON c.RXCUI = r.RXCUI2
+        WHERE r.RXCUI2 = :id
+          AND r.RELA = 'consists_of'
     """)
+
     with engine.connect() as conn:
         res = pd.read_sql(query, conn, params={'id': ID})
-    return res['STR'].iloc[0] if not res.empty else 'Not specified'
+
+    if res.empty:
+        return "Not specified"
+
+    s = res["STR"].iloc[0]
+
+    match = re.search(r'([A-Z0-9 ,]+)(?=\s*\[)', s)
+    if match:
+        return match.group(1).strip().title()
+
+    return "Not specified"
 
 def Fetch_Generic_Name(ID):
     query = text("""
