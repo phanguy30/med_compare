@@ -5,6 +5,7 @@ import pandas as pd
 import umap
 
 from app.helpers import (
+    Create_Ingredient_Combination_Frequency_Bar,
     Searchbar,
     Fetch_Ingredients,
     Fetch_Dose_Form,
@@ -13,9 +14,8 @@ from app.helpers import (
     Union_Drugs,
     Fetch_Matches,
     Fetch_Heatmap,
-    Create_Altair_Heatmap,
-    Create_UMAP_Cluster,
-    Create_Ingredient_Frequency_Bar,
+    Create_Linked_UMAP_Heatmap,
+    Create_Ingredient_Frequency_Bar
 )
 
 def _to_str_id_list(lst):
@@ -27,38 +27,59 @@ def register_callbacks(app):
     # 1) SEARCH DROPDOWN OPTIONS
     # ------------------------------------------------------------
     @app.callback(
-        Output("drug-search-dropdown", "options"),
-        Input("drug-search-dropdown", "search_value")
+    Output("drug-search-dropdown", "options"),
+    Input("drug-search-dropdown", "search_value"),
+    State("drug-search-dropdown", "value")
     )
-    def update_options(search_value):
-        if not search_value or len(search_value) < 3:
-            return []
+    def update_options(search_value, current_value):
+        options = []
 
-        df = Searchbar(search_value)
-        if df is None or df.empty:
-            return []
+        if search_value and len(search_value) >= 3:
+            df = Searchbar(search_value)
 
-        if "Product_Name" not in df.columns or "RXCUI" not in df.columns:
-            return []
+            if (
+                df is not None
+                and not df.empty
+                and "Product_Name" in df.columns
+                and "RXCUI" in df.columns
+            ):
+                options = [
+                    {
+                        "label": row["Product_Name"],
+                        "value": f"{row['Product_Name']}|{row['RXCUI']}"
+                    }
+                    for _, row in df.iterrows()
+                ]
 
-        return [
-            {"label": row["Product_Name"], "value": f"{row['Product_Name']}|{row['RXCUI']}"}
-            for _, row in df.iterrows()
-        ]
+        # Keep the selected value in options so Dash does not clear it
+        if current_value and all(opt["value"] != current_value for opt in options):
+            try:
+                name, rxcui = current_value.split("|", 1)
+                options = [{"label": name, "value": current_value}] + options
+            except ValueError:
+                pass
+
+        return options
 
 
     # ------------------------------------------------------------
     # 2) SAVE SELECTED DRUG
     # ------------------------------------------------------------
     @app.callback(
-        Output("selected-drug-store", "data"),
-        Input("drug-search-dropdown", "value"),
-        prevent_initial_call=True
+    Output("selected-drug-store", "data"),
+    Input("drug-search-dropdown", "value"),
+    State("selected-drug-store", "data"),
+    prevent_initial_call=True
     )
-    def save_selection(selected_value):
+    def save_selection(selected_value, current_store):
         if not selected_value:
-            return None
-        name, rxcui = selected_value.split("|")
+            return current_store
+
+        try:
+            name, rxcui = selected_value.split("|", 1)
+        except ValueError:
+            return current_store
+
         return {"id": str(rxcui), "name": name}
 
 
@@ -88,7 +109,7 @@ def register_callbacks(app):
         generic_full_name = Fetch_Generic_Name(rxcui)
 
         layout = html.Div([
-            html.H4(stored_data["name"], className="text-primary mb-3"),
+            html.H5(stored_data["name"], className="text-primary mb-3"),
             html.P([html.Strong("Generic Formula:"), html.Br(), html.Small(generic_full_name)]),
             html.P([html.Strong("Dose Form:"), dose_form]),
             html.P(html.Strong("Ingredients:")),
@@ -246,61 +267,63 @@ def register_callbacks(app):
 
 
     # ------------------------------------------------------------
-    # 8) UMAP (FIRST) — from stored heatmap_df
+    # 8) LINKED UMAP + HEATMAP — from stored heatmap_df
     # ------------------------------------------------------------
     @app.callback(
-        Output("umap-iframe", "srcDoc"),
+        Output("linked-plot-iframe", "srcDoc"),
         [
             Input("heatmap-df-store", "data"),
             State("selected-drug-store", "data"),
         ],
         prevent_initial_call=True
     )
-    def update_umap(heatmap_records, selected_drug):
+    def update_linked_plot(heatmap_records, selected_drug):
         if not heatmap_records or not selected_drug:
-            return "<h4>No data available</h4>"
+            return "<h4>No data available for linked plot</h4>"
 
         heatmap_df = pd.DataFrame(heatmap_records)
 
-        chart = Create_UMAP_Cluster(
-            heatmap_df,
-            drug_of_interest_name=selected_drug["name"],
-            doseform_weight=2.0,
-            jitter_strength=0.15
+        if heatmap_df.empty:
+            return "<h4>No data available for linked plot</h4>"
+
+        chart = Create_Linked_UMAP_Heatmap(
+            heatmap_df=heatmap_df,
+            drug_of_interest=str(selected_drug["id"]),
+            match_by="ID",
+            doseform_weight=2.0
         )
+
         return chart.to_html()
 
 
     # ------------------------------------------------------------
-    # 9) HEATMAP (SECOND) — from stored heatmap_df
+    # 9) BAR (THIRD) — from stored heatmap_df
     # ------------------------------------------------------------
     @app.callback(
-        Output("heatmap-iframe", "srcDoc"),
-        Input("heatmap-df-store", "data"),
-        State("selected-drug-store", "data"),
-        prevent_initial_call=True
-    )
-    def update_heatmap(heatmap_records, selected_drug):
-        if not heatmap_records or not selected_drug:
-            return "<h4>No data available for heatmap</h4>"
-
-        heatmap_df = pd.DataFrame(heatmap_records)
-        chart = Create_Altair_Heatmap(heatmap_df, str(selected_drug["id"]))
-        return chart.to_html()
-
-
-    # ------------------------------------------------------------
-    # 10) BAR (THIRD) — from stored heatmap_df
-    # ------------------------------------------------------------
-    @app.callback(
-        Output("bar-iframe", "srcDoc"),
+        Output("ingredient-bar-iframe", "srcDoc"),
+        Output("combination-bar-iframe", "srcDoc"),
         Input("heatmap-df-store", "data"),
         prevent_initial_call=True
     )
     def update_bar(heatmap_records):
         if not heatmap_records:
-            return "<h4>No data available</h4>"
+            msg = "<h4>No data available</h4>"
+            return msg, msg
 
         heatmap_df = pd.DataFrame(heatmap_records)
-        chart = Create_Ingredient_Frequency_Bar(heatmap_df)
-        return chart.to_html()
+
+        ingredient_chart = Create_Ingredient_Frequency_Bar(heatmap_df)
+        combination_chart = Create_Ingredient_Combination_Frequency_Bar(heatmap_df)
+
+        return ingredient_chart.to_html(), combination_chart.to_html()
+
+
+    @app.callback(
+        Output("linked-plot-container", "style"),
+        Output("bar-charts-container", "style"),
+        Input("main-view-toggle", "value")
+    )
+    def toggle_main_view(selected_view):
+        if selected_view == "linked_plot":
+            return {"display": "block"}, {"display": "none"}
+        return {"display": "none"}, {"display": "block"}

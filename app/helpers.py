@@ -1,5 +1,5 @@
-import dash
 import os
+import dash
 from dash import dcc, html, dash_table
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -12,7 +12,26 @@ import numpy as np
 import umap
 from difflib import get_close_matches
 
+from app.chart_helper import (
+    _message_chart,
+    _ensure_product_name,
+    _apply_selection,
+    _build_umap_features,
+    _fit_umap,
+    _add_embedding_columns,
+    _make_default_heatmap_subset,
+    _get_value_cols,
+    _prepare_brushed_heatmap_input,
+    _prepare_long_heatmap_df,
+    _prepare_default_row_bands,
+    _prepare_brushed_row_bands,
+    _build_brush,
+    _build_umap_chart,
+    _build_default_heatmap_layers,
+    _build_brushed_heatmap_layers,
+)
 
+alt.data_transformers.disable_max_rows()
 
 
 # SQLite Engine
@@ -229,11 +248,27 @@ def Fetch_Ingredients(ID):
 
 def Fetch_Dose_Form(ID):
     query = text("""
-        SELECT c.STR FROM RXNCONSO c JOIN RXNREL r ON c.RXCUI = r.RXCUI2 WHERE r.RXCUI1 = :id AND c.TTY = 'DF'
+        SELECT c.STR
+        FROM RXNCONSO c
+        JOIN RXNREL r
+            ON c.RXCUI = r.RXCUI2
+        WHERE r.RXCUI2 = :id
+          AND r.RELA = 'consists_of'
     """)
+
     with engine.connect() as conn:
         res = pd.read_sql(query, conn, params={'id': ID})
-    return res['STR'].iloc[0] if not res.empty else 'Not specified'
+
+    if res.empty:
+        return "Not specified"
+
+    s = res["STR"].iloc[0]
+
+    match = re.search(r'([A-Z0-9 ,]+)(?=\s*\[)', s)
+    if match:
+        return match.group(1).strip().title()
+
+    return "Not specified"
 
 def Fetch_Generic_Name(ID):
     query = text("""
@@ -242,6 +277,7 @@ def Fetch_Generic_Name(ID):
     with engine.connect() as conn:
         res = pd.read_sql(query, conn, params={'id': ID})
     return res['STR'].iloc[0] if not res.empty else 'N/A'
+
 
 def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
 
@@ -336,253 +372,66 @@ def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
         .merge(id_df, on='Product_Name', how='left')
     )
 
-    heatmap_df['Dose_Form'] = None
+    heatmap_df['Dose_Form'] = heatmap_df['ID'].apply(Fetch_Dose_Form)
     return heatmap_df
 
-def Create_Altair_Heatmap(heatmap_df, drug_of_interest, match_by='ID'):
-    """
-    drug_of_interest:
-      - if match_by='ID': pass the numeric/string ID value
-      - if match_by='Product_Name': pass the full product name (not truncated)
-    """
 
-    import pandas as pd
-    import altair as alt
 
-    if 'Product_Name' not in heatmap_df.columns:
-        heatmap_df = heatmap_df.reset_index()
 
-    # ---- Dynamic height ----
-    num_products = heatmap_df['Product_Name'].nunique()
-    height_per_product = 20
-    dynamic_height = max(250, min(1400, num_products * height_per_product))
 
-    # ---- Ingredient columns ----
-    non_ingredient_cols = {'Product_Name', 'Ingredients_List', 'ID', 'Dose_Form'}
-    value_cols = [c for c in heatmap_df.columns if c not in non_ingredient_cols]
 
-    # ---- Long format ----
-    df_long = heatmap_df.melt(
-        id_vars=['Product_Name', 'ID'],
-        value_vars=value_cols,
-        var_name='Ingredient',
-        value_name='Concentration'
-    )
 
-    df_long['Product_Name'] = df_long['Product_Name'].astype(str)
-    df_long['Ingredient'] = df_long['Ingredient'].astype(str)
-    df_long['Concentration'] = pd.to_numeric(df_long['Concentration'], errors='coerce').fillna(0)
+def Create_Ingredient_Combination_Frequency_Bar(heatmap_df):
 
-    # ---- Selected flag (NO fuzzy match) ----
-    if match_by == 'ID':
-        selected_id = str(drug_of_interest).strip()
-        df_long['ID_str'] = df_long['ID'].astype(str).str.strip()
-        df_long['is_selected'] = df_long['ID_str'].eq(selected_id)
-        highlight_title = df_long.loc[df_long['is_selected'], 'Product_Name'].iloc[0] if df_long['is_selected'].any() else f'ID={selected_id}'
-
-    elif match_by == 'Product_Name':
-        selected_name = str(drug_of_interest).strip().lower()
-        df_long['Product_Name_norm'] = df_long['Product_Name'].str.strip().str.lower()
-        df_long['is_selected'] = df_long['Product_Name_norm'].eq(selected_name)
-        highlight_title = drug_of_interest
-
-    else:
-        raise ValueError('match_by must be "ID" or "Product_Name"')
-
-    # If nothing matched, show message (so you immediately know why)
-    if not df_long['is_selected'].any():
-        return alt.Chart(pd.DataFrame({
-            'msg': [f'No match found for {match_by} = {drug_of_interest}. (No row highlighted)']
-        })).mark_text(size=14).encode(text='msg:N')
-
-    # ---- Relative concentration per ingredient ----
-    df_long['Relative_Conc'] = (
-        df_long.groupby('Ingredient')['Concentration']
-        .transform(lambda x: x / x.max() if x.max() != 0 else 0)
-    )
-
-    ingredients = sorted(df_long['Ingredient'].unique())
-    if len(ingredients) == 0:
-        return alt.Chart(pd.DataFrame({'msg': ['No data to plot.']})).mark_text().encode(text='msg:N')
-
-    # ---- Row helper for zebra + selected band ----
-    df_rows = (
-        df_long[['Product_Name', 'is_selected']]
-        .drop_duplicates()
-        .sort_values('Product_Name')
-        .reset_index(drop=True)
-    )
-    df_rows['row_index'] = df_rows.index
-    df_rows['is_odd'] = (df_rows['row_index'] % 2 == 1)
-    df_rows['x_start'] = ingredients[0]
-    df_rows['x_end'] = ingredients[-1]
-
-    base = alt.Chart(df_long).encode(
-        x=alt.X(
-            'Ingredient:N',
-            axis=alt.Axis(labelAngle=-45),
-            sort=ingredients,
-            scale=alt.Scale(padding=0)
-        ),
-        y=alt.Y('Product_Name:N', sort='-x')
-    )
-
-    # Zebra bands
-    row_bands = alt.Chart(df_rows).mark_rect().encode(
-        x=alt.X('x_start:N', sort=ingredients, scale=alt.Scale(padding=0), title=None),
-        x2='x_end:N',
-        y=alt.Y('Product_Name:N', sort='-x'),
-        color=alt.condition(
-            alt.datum.is_odd,
-            alt.value('#f3f3f3'),
-            alt.value('white')
-        )
-    )
-
-    # Strong selected row band
-    selected_row_band = alt.Chart(df_rows).transform_filter(
-        alt.datum.is_selected
-    ).mark_rect(
-        color='#cfe8ff',
-        opacity=0.45
-    ).encode(
-        x=alt.X('x_start:N', sort=ingredients, scale=alt.Scale(padding=0), title=None),
-        x2='x_end:N',
-        y=alt.Y('Product_Name:N', sort='-x')
-    )
-
-    # Zero cells highlight only for selected row
-    highlight_zeros = base.transform_filter(
-        alt.datum.is_selected & (alt.datum.Concentration == 0)
-    ).mark_rect().encode(
-        color=alt.value('#f8d7da')
-    )
-
-    # Main heatmap (non-zero)
-    nonzero_layer = base.transform_filter(
-        alt.datum.Concentration > 0
-    ).mark_rect().encode(
-        color=alt.Color(
-            'Relative_Conc:Q',
-            scale=alt.Scale(scheme='reds', domain=[0, 1]),
-            title='Relative Concentration'
-        ),
-        tooltip=[
-            'Product_Name:N',
-            'Ingredient:N',
-            alt.Tooltip('Concentration:Q', title='Concentration (mg)'),
-            alt.Tooltip('Relative_Conc:Q', format='.2f', title='Relative')
-        ]
-    )
-
-    # Outline each cell in selected row
-    row_cell_outline = base.transform_filter(
-        alt.datum.is_selected
-    ).mark_rect(
-        fillOpacity=0,
-        stroke='#2b6cb0',
-        strokeWidth=2,
-        strokeOpacity=1
-    )
-
-    chart = (
-        row_bands +
-        selected_row_band +
-        highlight_zeros +
-        nonzero_layer +
-        row_cell_outline
-    ).properties(
-        width=1300,
-        height=dynamic_height,
-        title=f'Ingredient Concentration Heatmap (Highlighted: {highlight_title})'
-    ).configure_view(
-        fill='white',
-        strokeOpacity=0
-    ).configure(
-        background='white'
-    )
-
-    return chart
-
-def Create_UMAP_Cluster(heatmap_df, drug_of_interest_name, doseform_weight=2.0, jitter_strength=0.15):
-    if heatmap_df is None:
-        raise ValueError('heatmap_df is None')
-    if heatmap_df.empty:
-        raise ValueError("heatmap_df is EMPTY (0 rows). UMAP can't run.")
-
+    # Identify ingredient columns
     ignore_cols = {'Product_Name', 'Ingredients_List', 'ID', 'Dose_Form'}
     ingredient_cols = [c for c in heatmap_df.columns if c not in ignore_cols]
 
-    df_form = heatmap_df[['Dose_Form']].copy()
-    df_form['Dose_Form'] = df_form['Dose_Form'].fillna('UNKNOWN').astype(str)
-    form_ohe = pd.get_dummies(df_form['Dose_Form'], prefix='DF').astype(float) * float(doseform_weight)
+    if len(ingredient_cols) == 0:
+        raise ValueError("No ingredient columns found.")
 
-    if len(ingredient_cols) > 0:
-        X_ing = (
-            heatmap_df[ingredient_cols]
-            .apply(pd.to_numeric, errors='coerce')
-            .fillna(0)
-            .to_numpy(dtype=float)
-        )
-    else:
-        X_ing = np.zeros((len(heatmap_df), 0), dtype=float)
+    # Convert to binary presence matrix
+    binary_df = heatmap_df[ingredient_cols].gt(0)
 
-    # Combine
-    X = np.hstack([X_ing, form_ohe.to_numpy(dtype=float)])
-
-    # Diagnostics (super important)
-    n_samples, n_features = X.shape
-    print(f'DEBUG: n_samples={n_samples}, n_features={n_features}, ingredient_cols={len(ingredient_cols)}, doseform_cols={form_ohe.shape[1]}')
-    print('DEBUG: unique products =', heatmap_df['Product_Name'].nunique())
-
-    # If you end up with 0 rows or only 1 row, UMAP will fail
-    if n_samples < 2:
-        raise ValueError(f'UMAP needs at least 2 rows. You have {n_samples}. Your heatmap_df likely contains only {drug_of_interest_name}.')
-
-    # UMAP requires n_neighbors < n_samples
-    n_neighbors = min(10, n_samples - 1)
-    n_neighbors = max(2, n_neighbors)
-
-    reducer = umap.UMAP(
-        n_neighbors=n_neighbors,
-        min_dist=0.3,
-        n_components=2,
-        metric='euclidean',
-        random_state=42
-    )
-    embedding = reducer.fit_transform(X)
-
-    plot_df = heatmap_df[['Product_Name', 'Ingredients_List', 'Dose_Form']].copy()
-    plot_df['UMAP1'] = embedding[:, 0]
-    plot_df['UMAP2'] = embedding[:, 1]
-
-    plot_df['Ingredients_Str'] = plot_df['Ingredients_List'].apply(
-        lambda x: ', '.join(x) if isinstance(x, list) else str(x)
+    # Build a canonical combination label for each product
+    combo_series = binary_df.apply(
+        lambda row: " + ".join(sorted(row.index[row].tolist())) if row.any() else "No Ingredient",
+        axis=1
     )
 
-    plot_df['Is_Interest'] = plot_df['Product_Name'].astype(str).str.lower().eq(str(drug_of_interest_name).lower())
+    # Count frequency of each combination
+    combo_freq = combo_series.value_counts().reset_index()
+    combo_freq.columns = ['Ingredient_Combination', 'Product_Count']
 
-    rng = np.random.default_rng(42)
-    plot_df['UMAP1_jitter'] = plot_df['UMAP1'] + rng.normal(0, jitter_strength, len(plot_df))
-    plot_df['UMAP2_jitter'] = plot_df['UMAP2'] + rng.normal(0, jitter_strength, len(plot_df))
-
-    chart = alt.Chart(plot_df).mark_circle(size=100).encode(
-        x=alt.X('UMAP1_jitter:Q', title='UMAP Dimension 1'),
-        y=alt.Y('UMAP2_jitter:Q', title='UMAP Dimension 2'),
-        color=alt.condition(alt.datum.Is_Interest, alt.value('red'), alt.value('steelblue')),
-        size=alt.condition(alt.datum.Is_Interest, alt.value(220), alt.value(80)),
+    # Create bar chart
+    chart = alt.Chart(combo_freq).mark_bar().encode(
+        x=alt.X(
+            'Product_Count:Q',
+            title='Number of Products'
+        ),
+        y=alt.Y(
+            'Ingredient_Combination:N',
+            sort='-x',
+            title='Ingredient Combination'
+        ),
+        color=alt.Color(
+            'Product_Count:Q',
+            scale=alt.Scale(scheme='reds'),
+            title='Frequency'
+        ),
         tooltip=[
-            alt.Tooltip('Product_Name:N', title='Product'),
-            alt.Tooltip('Dose_Form:N', title='Dose Form'),
-            alt.Tooltip('Ingredients_Str:N', title='Ingredients')
+            alt.Tooltip('Ingredient_Combination:N', title='Combination'),
+            alt.Tooltip('Product_Count:Q', title='Products with combination')
         ]
     ).properties(
         width=650,
         height=400,
-        title=f'Drug Similarity Clustering (UMAP) — DoseForm weighted x{doseform_weight}'
+        title='Ingredient Combination Frequency Across Products'
     )
 
     return chart
+
+
 
 def Create_Ingredient_Frequency_Bar(heatmap_df):
 
@@ -631,3 +480,148 @@ def Create_Ingredient_Frequency_Bar(heatmap_df):
         title='Ingredient Frequency Across Products'
     )
     return chart
+
+
+
+def Create_Linked_UMAP_Heatmap(
+    heatmap_df,
+    drug_of_interest,
+    match_by='ID',
+    max_related=10,
+    doseform_weight=2.0,
+    jitter_strength=0.15
+):
+    """
+    Create a linked Altair visualization consisting of:
+    1. A UMAP scatter plot of drug similarity
+    2. A concentration heatmap that updates when points are brushed in the UMAP plot
+
+    Parameters
+    ----------
+    heatmap_df : pd.DataFrame
+        Input dataframe containing product metadata, ingredient concentrations,
+        and dose form information.
+    drug_of_interest : str
+        Product identifier or product name used to select the focal drug.
+    match_by : {"ID", "Product_Name"}, default="ID"
+        Column used to identify the selected drug.
+    max_related : int or None, default=10
+        Number of non-selected products to include in the default heatmap view.
+        If None, include all non-selected products.
+    doseform_weight : float, default=2.0
+        Multiplicative weight applied to one-hot encoded dose form features
+        before UMAP.
+    jitter_strength : float, default=0.15
+        Standard deviation of random jitter added to UMAP coordinates for plotting.
+
+    Returns
+    -------
+    alt.Chart
+        Horizontally concatenated Altair chart with linked UMAP and heatmap.
+    """
+    if heatmap_df is None:
+        raise ValueError('heatmap_df is None')
+
+    if heatmap_df.empty:
+        return _message_chart('No data available.')
+
+    df = heatmap_df.copy()
+    df = _ensure_product_name(df)
+    df = _apply_selection(df, drug_of_interest, match_by)
+
+    if not df['is_selected'].any():
+        return _message_chart(f'No match found for {match_by} = {drug_of_interest}.')
+
+    X, ingredient_cols, form_ohe = _build_umap_features(df, doseform_weight=doseform_weight)
+
+    n_samples, n_features = X.shape
+    print(
+        f'DEBUG LINKED: n_samples={n_samples}, n_features={n_features}, '
+        f'ingredient_cols={len(ingredient_cols)}, doseform_cols={form_ohe.shape[1]}'
+    )
+
+    try:
+        embedding = _fit_umap(X)
+    except ValueError as e:
+        return _message_chart(str(e), size=16)
+
+    plot_df = _add_embedding_columns(
+        df,
+        embedding,
+        jitter_strength=jitter_strength,
+        seed=42
+    )
+
+    brushed_source_df = _prepare_brushed_heatmap_input(plot_df)
+
+    value_cols = _get_value_cols(brushed_source_df)
+    brush = _build_brush()
+    no_brush = "!length(data('brush_store'))"
+    has_brush = "length(data('brush_store'))"
+
+    umap_chart = _build_umap_chart(plot_df, brush)
+
+    if not value_cols:
+        heatmap_chart = _message_chart('No ingredient data to plot.')
+        return (
+            alt.hconcat(umap_chart, heatmap_chart)
+            .resolve_scale(color='independent')
+            .configure_view(fill='white', strokeOpacity=0)
+            .configure(background='white')
+        )
+
+    heatmap_subset, highlight_title = _make_default_heatmap_subset(
+        plot_df,
+        max_related=max_related
+    )
+
+    df_long_default = _prepare_long_heatmap_df(
+        heatmap_subset,
+        value_cols=value_cols,
+        id_vars=['Product_Name', 'ID', 'is_selected']
+    )
+    default_ingredients = sorted(df_long_default['Ingredient'].unique())
+    default_product_order = heatmap_subset['Product_Name'].tolist()
+    df_rows_default = _prepare_default_row_bands(heatmap_subset, default_ingredients)
+
+    df_long_brushed = _prepare_long_heatmap_df(
+        brushed_source_df,
+        value_cols=value_cols,
+        id_vars=[
+            'Product_Name', 'ID', 'is_selected',
+            'UMAP1_jitter', 'UMAP2_jitter', 'sort_key'
+        ]
+    )
+    brushed_ingredients = sorted(df_long_brushed['Ingredient'].unique())
+    df_rows_brushed = _prepare_brushed_row_bands(brushed_source_df, brushed_ingredients)
+
+    default_layers = _build_default_heatmap_layers(
+        df_long_default=df_long_default,
+        df_rows_default=df_rows_default,
+        default_ingredients=default_ingredients,
+        default_product_order=default_product_order,
+        no_brush=no_brush
+    )
+
+    brushed_layers = _build_brushed_heatmap_layers(
+        df_long_brushed=df_long_brushed,
+        df_rows_brushed=df_rows_brushed,
+        brushed_ingredients=brushed_ingredients,
+        brush=brush,
+        has_brush=has_brush
+    )
+
+    heatmap_chart = (
+        default_layers + brushed_layers
+    ).properties(
+        width=900,
+        height=450,
+        title=f'Ingredient Concentration Heatmap (Default: {highlight_title} + top {max_related})'
+    )
+
+    return (
+        alt.hconcat(umap_chart, heatmap_chart)
+        .resolve_scale(color='independent')
+        .configure_view(fill='white', strokeOpacity=0)
+        .configure(background='white')
+    )

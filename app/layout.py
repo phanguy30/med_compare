@@ -29,72 +29,121 @@ def create_layout():
         # ROW 1: Drug Info (left) + Exact Matches (right)
         # =========================================================
         dbc.Row([
-
-            # LEFT: Drug Info
             dbc.Col([
-                html.H4("Drug Information"),
-                html.Div(id="drug-info-content"),
+                html.H4("Drug Information", className="mb-3"),
+                dbc.Card(
+                    dbc.CardBody(
+                        html.Div(id="drug-info-content")
+                    ),
+                    className="shadow-sm"
+                ),
             ], md=6),
 
-            # RIGHT: Exact Matches
             dbc.Col([
                 html.H4("Exact Matches"),
                 html.Div(id="exact-matches-content"),
 
-                # Button must exist at startup
                 dbc.Button(
                     "View all equivalents...",
                     id="open-modal",
                     color="link",
                     size="sm",
                     className="mt-2 p-0",
-                    style={"display": "none"}  # hidden until needed
-                ),
-            ], md=6),
-
-        ], className="mb-4"),  # spacing under row
-
-
-        # =========================================================
-        # ROW 2: UMAP (left) + Bar Chart (right)
-        # =========================================================
-        dbc.Row([
-
-            dbc.Col([
-                html.H4("Drug Similarity (UMAP)"),
-                html.Iframe(
-                    id="umap-iframe",
-                    style={"width": "100%", "height": "650px", "border": "none"}
-                ),
-            ], md=6),
-
-            dbc.Col([
-                html.H4("Ingredient Frequency Bar Chart"),
-                html.Iframe(
-                    id="bar-iframe",
-                    style={"width": "100%", "height": "650px", "border": "none"}
+                    style={"display": "none"}
                 ),
             ], md=6),
 
         ], className="mb-4"),
 
-
         # =========================================================
-        # ROW 3: Heatmap (full width)
+        # VIEW TOGGLE FOR ROW 2 / ROW 3
         # =========================================================
         dbc.Row([
             dbc.Col([
-                html.H4("Related Drugs Heatmap"),
-                html.Iframe(
-                    id="heatmap-iframe",
-                    style={"width": "100%", "height": "700px", "border": "none"}
+                html.H4("Similar Product Discovery", className="mb-3"),
+                dbc.RadioItems(
+                    id="main-view-toggle",
+                    className="btn-group",
+                    inputClassName="btn-check",
+                    labelClassName="btn btn-outline-primary",
+                    labelCheckedClassName="active",
+                    options=[
+                        {
+                            "label": "Similarity + Heatmap",
+                            "value": "linked_plot"
+                        },
+                        {
+                            "label": "Alternative Combinations",
+                            "value": "bar_charts"
+                        },
+                    ],
+                    value="linked_plot",
                 ),
             ], md=12),
-        ], className="mb-4"),
+        ], className="mb-3"),
 
+        # =========================================================
+        # ROW 2 CONTENT: LINKED UMAP + HEATMAP
+        # =========================================================
+        html.Div(
+            id="linked-plot-container",
+            children=[
+                dbc.Row([
+                    dbc.Col([
+                        html.Iframe(
+                            id="linked-plot-iframe",
+                            style={
+                                "width": "100%",
+                                "height": "900px",
+                                "border": "none"
+                            }
+                        ),
+                    ], md=12),
+                ], className="mb-4"),
+            ],
+            style={"display": "block"},
+        ),
+
+        # =========================================================
+        # ROW 3 CONTENT: BAR CHARTS
+        # =========================================================
+        html.Div(
+            id="bar-charts-container",
+            children=[
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Tabs([
+                            dbc.Tab(
+                                html.Iframe(
+                                    id="ingredient-bar-iframe",
+                                    style={
+                                        "width": "100%",
+                                        "height": "500px",
+                                        "border": "none"
+                                    },
+                                ),
+                                label="Ingredient Frequency",
+                            ),
+                            dbc.Tab(
+                                html.Iframe(
+                                    id="combination-bar-iframe",
+                                    style={
+                                        "width": "100%",
+                                        "height": "500px",
+                                        "border": "none"
+                                    },
+                                ),
+                                label="Combination Frequency",
+                            ),
+                        ], className="mb-3"),
+                    ], md=12),
+                ], className="mb-4"),
+            ],
+            style={"display": "none"},
+        ),
 
         # ----------------------------
-        # MODAL (must exist at startup)
+        # MODAL
         # ----------------------------
         dbc.Modal(
             [
