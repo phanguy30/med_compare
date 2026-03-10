@@ -34,6 +34,10 @@ from app.chart_helper import (
 alt.data_transformers.disable_max_rows()
 
 
+PRECOMPUTED_UMAP_PATH = "precomputed/global_umap_embedding.parquet"
+global_umap_df = pd.read_parquet(PRECOMPUTED_UMAP_PATH)
+global_umap_df["ID"] = global_umap_df["ID"].astype(str)
+
 # SQLite Engine
 engine = create_engine(
     "sqlite:///rxnorm.sqlite",
@@ -609,3 +613,4 @@ def Create_Linked_UMAP_Heatmap(
         .configure_view(fill='white', strokeOpacity=0)
         .configure(background='white')
     )
+    

@@ -15,6 +15,74 @@ from difflib import get_close_matches
 alt.data_transformers.disable_max_rows()
 
 
+PRECOMPUTED_UMAP_PATH = "precomputed/global_umap_embedding.parquet"
+
+global_umap_df = pd.read_parquet(PRECOMPUTED_UMAP_PATH)
+global_umap_df["ID"] = global_umap_df["ID"].astype(str)
+
+
+def _attach_precomputed_embedding(df, embedding_df, jitter_strength=0.15, seed=42):
+    """
+    Merge precomputed global UMAP coordinates into the current heatmap dataframe.
+
+    If a row is missing from the embedding file, fall back to random small jitter
+    around 0 so the plot still renders.
+    """
+    plot_df = df.copy()
+    plot_df["ID"] = plot_df["ID"].astype(str)
+
+    emb = embedding_df.copy()
+    emb["ID"] = emb["ID"].astype(str)
+
+    keep_cols = ["ID", "UMAP1", "UMAP2"]
+    if "UMAP1_jitter" in emb.columns:
+        keep_cols.append("UMAP1_jitter")
+    if "UMAP2_jitter" in emb.columns:
+        keep_cols.append("UMAP2_jitter")
+    if "Dose_Form" in emb.columns:
+        keep_cols.append("Dose_Form")
+
+    plot_df = plot_df.merge(
+        emb[keep_cols].drop_duplicates("ID"),
+        on="ID",
+        how="left",
+        suffixes=("", "_pre")
+    )
+
+    # Keep current dose form if present; otherwise optionally fill from embedding file
+    if "Dose_Form_pre" in plot_df.columns:
+        plot_df["Dose_Form"] = plot_df["Dose_Form"].fillna(plot_df["Dose_Form_pre"])
+        plot_df = plot_df.drop(columns=["Dose_Form_pre"])
+
+    plot_df["Ingredients_Str"] = plot_df["Ingredients_List"].apply(
+        lambda x: ", ".join(x) if isinstance(x, list) else str(x)
+    )
+
+    # fallback for any missing coordinates
+    missing = plot_df["UMAP1"].isna() | plot_df["UMAP2"].isna()
+    if missing.any():
+        rng = np.random.default_rng(seed)
+        n_missing = int(missing.sum())
+        plot_df.loc[missing, "UMAP1"] = rng.normal(0, jitter_strength, n_missing)
+        plot_df.loc[missing, "UMAP2"] = rng.normal(0, jitter_strength, n_missing)
+
+    if "UMAP1_jitter" not in plot_df.columns or plot_df["UMAP1_jitter"].isna().any():
+        rng = np.random.default_rng(seed)
+        need = plot_df["UMAP1_jitter"].isna() if "UMAP1_jitter" in plot_df.columns else pd.Series(True, index=plot_df.index)
+        plot_df.loc[need, "UMAP1_jitter"] = (
+            plot_df.loc[need, "UMAP1"] + rng.normal(0, jitter_strength, need.sum())
+        )
+
+    if "UMAP2_jitter" not in plot_df.columns or plot_df["UMAP2_jitter"].isna().any():
+        rng = np.random.default_rng(seed + 1)
+        need = plot_df["UMAP2_jitter"].isna() if "UMAP2_jitter" in plot_df.columns else pd.Series(True, index=plot_df.index)
+        plot_df.loc[need, "UMAP2_jitter"] = (
+            plot_df.loc[need, "UMAP2"] + rng.normal(0, jitter_strength, need.sum())
+        )
+
+    return plot_df
+
+
 def _message_chart(msg, size=14):
     """Return a simple text chart for empty/error states."""
     return alt.Chart(pd.DataFrame({'msg': [msg]})).mark_text(size=size).encode(
