@@ -16,9 +16,7 @@ from app.chart_helper import (
     _message_chart,
     _ensure_product_name,
     _apply_selection,
-    _build_umap_features,
-    _fit_umap,
-    _add_embedding_columns,
+    _attach_precomputed_embedding,
     _make_default_heatmap_subset,
     _get_value_cols,
     _prepare_brushed_heatmap_input,
@@ -476,12 +474,12 @@ def Create_Linked_UMAP_Heatmap(
     drug_of_interest,
     match_by='ID',
     max_related=10,
-    doseform_weight=2.0,
+    doseform_weight=2.0,  # kept for API compatibility, not used with precomputed UMAP
     jitter_strength=0.15
 ):
     """
     Create a linked Altair visualization consisting of:
-    1. A UMAP scatter plot of drug similarity
+    1. A precomputed UMAP scatter plot of drug similarity
     2. A concentration heatmap that updates when points are brushed in the UMAP plot
 
     Parameters
@@ -497,10 +495,11 @@ def Create_Linked_UMAP_Heatmap(
         Number of non-selected products to include in the default heatmap view.
         If None, include all non-selected products.
     doseform_weight : float, default=2.0
-        Multiplicative weight applied to one-hot encoded dose form features
-        before UMAP.
+        Kept only for backward compatibility. Not used when attaching a
+        precomputed embedding.
     jitter_strength : float, default=0.15
-        Standard deviation of random jitter added to UMAP coordinates for plotting.
+        Standard deviation of random jitter added to plotting coordinates when
+        jitter is missing from the precomputed embedding.
 
     Returns
     -------
@@ -508,34 +507,22 @@ def Create_Linked_UMAP_Heatmap(
         Horizontally concatenated Altair chart with linked UMAP and heatmap.
     """
     if heatmap_df is None:
-        raise ValueError('heatmap_df is None')
+        raise ValueError("heatmap_df is None")
 
     if heatmap_df.empty:
-        return _message_chart('No data available.')
+        return _message_chart("No data available.")
 
     df = heatmap_df.copy()
     df = _ensure_product_name(df)
     df = _apply_selection(df, drug_of_interest, match_by)
 
-    if not df['is_selected'].any():
-        return _message_chart(f'No match found for {match_by} = {drug_of_interest}.')
+    if not df["is_selected"].any():
+        return _message_chart(f"No match found for {match_by} = {drug_of_interest}.")
 
-    X, ingredient_cols, form_ohe = _build_umap_features(df, doseform_weight=doseform_weight)
-
-    n_samples, n_features = X.shape
-    print(
-        f'DEBUG LINKED: n_samples={n_samples}, n_features={n_features}, '
-        f'ingredient_cols={len(ingredient_cols)}, doseform_cols={form_ohe.shape[1]}'
-    )
-
-    try:
-        embedding = _fit_umap(X)
-    except ValueError as e:
-        return _message_chart(str(e), size=16)
-
-    plot_df = _add_embedding_columns(
+    # Attach precomputed global embedding instead of fitting UMAP at runtime
+    plot_df = _attach_precomputed_embedding(
         df,
-        embedding,
+        global_umap_df,
         jitter_strength=jitter_strength,
         seed=42
     )
@@ -550,12 +537,12 @@ def Create_Linked_UMAP_Heatmap(
     umap_chart = _build_umap_chart(plot_df, brush)
 
     if not value_cols:
-        heatmap_chart = _message_chart('No ingredient data to plot.')
+        heatmap_chart = _message_chart("No ingredient data to plot.")
         return (
             alt.hconcat(umap_chart, heatmap_chart)
-            .resolve_scale(color='independent')
-            .configure_view(fill='white', strokeOpacity=0)
-            .configure(background='white')
+            .resolve_scale(color="independent")
+            .configure_view(fill="white", strokeOpacity=0)
+            .configure(background="white")
         )
 
     heatmap_subset, highlight_title = _make_default_heatmap_subset(
@@ -566,22 +553,28 @@ def Create_Linked_UMAP_Heatmap(
     df_long_default = _prepare_long_heatmap_df(
         heatmap_subset,
         value_cols=value_cols,
-        id_vars=['Product_Name', 'ID', 'is_selected']
+        id_vars=["Product_Name", "ID", "is_selected"]
     )
-    default_ingredients = sorted(df_long_default['Ingredient'].unique())
-    default_product_order = heatmap_subset['Product_Name'].tolist()
-    df_rows_default = _prepare_default_row_bands(heatmap_subset, default_ingredients)
+    default_ingredients = sorted(df_long_default["Ingredient"].unique())
+    default_product_order = heatmap_subset["Product_Name"].tolist()
+    df_rows_default = _prepare_default_row_bands(
+        heatmap_subset,
+        default_ingredients
+    )
 
     df_long_brushed = _prepare_long_heatmap_df(
         brushed_source_df,
         value_cols=value_cols,
         id_vars=[
-            'Product_Name', 'ID', 'is_selected',
-            'UMAP1_jitter', 'UMAP2_jitter', 'sort_key'
+            "Product_Name", "ID", "is_selected",
+            "UMAP1_jitter", "UMAP2_jitter", "sort_key"
         ]
     )
-    brushed_ingredients = sorted(df_long_brushed['Ingredient'].unique())
-    df_rows_brushed = _prepare_brushed_row_bands(brushed_source_df, brushed_ingredients)
+    brushed_ingredients = sorted(df_long_brushed["Ingredient"].unique())
+    df_rows_brushed = _prepare_brushed_row_bands(
+        brushed_source_df,
+        brushed_ingredients
+    )
 
     default_layers = _build_default_heatmap_layers(
         df_long_default=df_long_default,
@@ -599,18 +592,22 @@ def Create_Linked_UMAP_Heatmap(
         has_brush=has_brush
     )
 
+    if max_related is None:
+        heatmap_title = f"Ingredient Concentration Heatmap (Default: {highlight_title} + all related)"
+    else:
+        heatmap_title = f"Ingredient Concentration Heatmap (Default: {highlight_title} + top {max_related})"
+
     heatmap_chart = (
         default_layers + brushed_layers
     ).properties(
         width=900,
         height=450,
-        title=f'Ingredient Concentration Heatmap (Default: {highlight_title} + top {max_related})'
+        title=heatmap_title
     )
 
     return (
         alt.hconcat(umap_chart, heatmap_chart)
-        .resolve_scale(color='independent')
-        .configure_view(fill='white', strokeOpacity=0)
-        .configure(background='white')
+        .resolve_scale(color="independent")
+        .configure_view(fill="white", strokeOpacity=0)
+        .configure(background="white")
     )
-    
