@@ -356,7 +356,7 @@ def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
         .merge(id_df, on='Product_Name', how='left')
     )
 
-    heatmap_df['Dose_Form'] = None
+    heatmap_df['Dose_Form'] = heatmap_df['ID'].apply(Fetch_Dose_Form)
     return heatmap_df
 
 
