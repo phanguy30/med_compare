@@ -108,38 +108,35 @@ def create_layout():
         # ROW 3 CONTENT: BAR CHARTS
         # =========================================================
         html.Div(
-            id="bar-charts-container",
-            children=[
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Tabs([
-                            dbc.Tab(
-                                html.Iframe(
-                                    id="ingredient-bar-iframe",
-                                    style={
-                                        "width": "100%",
-                                        "height": "500px",
-                                        "border": "none"
-                                    },
+        id="bar-charts-container",
+        children=[
+            dbc.Row([
+                dbc.Col([
+                    html.H5("Ingredient Frequency", className="mb-2"),
+                    html.Iframe(
+                        id="ingredient-bar-iframe",
+                        style={
+                            "width": "100%",
+                            "height": "500px",
+                            "border": "none"
+                               },
                                 ),
-                                label="Ingredient Frequency",
+                            ], md=6),
+
+                            dbc.Col([
+                            html.H5("Combination Frequency", className="mb-2"),
+                            html.Iframe(
+                            id="combination-bar-iframe",
+                            style={
+                            "width": "100%",
+                            "height": "500px",
+                            "border": "none"
+                            },
                             ),
-                            dbc.Tab(
-                                html.Iframe(
-                                    id="combination-bar-iframe",
-                                    style={
-                                        "width": "100%",
-                                        "height": "500px",
-                                        "border": "none"
-                                    },
-                                ),
-                                label="Combination Frequency",
-                            ),
-                        ], className="mb-3"),
-                    ], md=12),
-                ], className="mb-4"),
-            ],
-            style={"display": "none"},
+                 ], md=6),
+              ], className="mb-4"),
+          ],
+          style={"display": "none"},
         ),
 
         # ----------------------------
