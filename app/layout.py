@@ -16,8 +16,26 @@ def create_layout():
         html.H2("Drug Explorer", className="my-4"),
 
         # ----------------------------
+        # QUICK SAMPLE DRUGS
+        # ----------------------------
+        html.H5("Quick Sample Drugs", className="mb-3"),
+        dbc.RadioItems(
+            id="sample-drug-buttons",
+            className="btn-group mb-3",
+            inputClassName="btn-check",
+            labelClassName="btn btn-outline-primary",
+            labelCheckedClassName="active",
+            options=[
+                {"label": "Tylenol", "value": "Tylenol"},
+                {"label": "Excedrin", "value": "Excedrin"},
+            ],
+            value="Tylenol",
+        ),
+
+        # ----------------------------
         # SEARCH
         # ----------------------------
+        html.H5("Search Any Drug", className="mb-2"),
         dcc.Dropdown(
             id="drug-search-dropdown",
             placeholder="Search for a drug..."
@@ -56,7 +74,7 @@ def create_layout():
         ], className="mb-4"),
 
         # =========================================================
-        # VIEW TOGGLE FOR ROW 2 / ROW 3
+        # VIEW TOGGLE
         # =========================================================
         dbc.Row([
             dbc.Col([
@@ -83,7 +101,7 @@ def create_layout():
         ], className="mb-3"),
 
         # =========================================================
-        # ROW 2 CONTENT: LINKED UMAP + HEATMAP
+        # LINKED UMAP + HEATMAP
         # =========================================================
         html.Div(
             id="linked-plot-container",
@@ -105,7 +123,7 @@ def create_layout():
         ),
 
         # =========================================================
-        # ROW 3 CONTENT: BAR CHARTS
+        # BAR CHARTS
         # =========================================================
         html.Div(
             id="bar-charts-container",

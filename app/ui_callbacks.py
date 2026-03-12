@@ -2,11 +2,12 @@ from dash import html, no_update, ctx
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 import pandas as pd
-import umap
 
 from app.helpers import (
     Create_Ingredient_Combination_Frequency_Bar,
+    Create_Ingredient_Frequency_Bar,
     Searchbar,
+    Searchbar_exact_product,
     Fetch_Ingredients,
     Fetch_Dose_Form,
     Fetch_Generic_Name,
@@ -15,7 +16,8 @@ from app.helpers import (
     Fetch_Matches,
     Fetch_Heatmap,
     Create_Linked_UMAP_Heatmap,
-    Create_Ingredient_Frequency_Bar
+    is_precomputed_sample,
+    get_precomputed_html,
 )
 
 def _to_str_id_list(lst):
@@ -27,9 +29,9 @@ def register_callbacks(app):
     # 1) SEARCH DROPDOWN OPTIONS
     # ------------------------------------------------------------
     @app.callback(
-    Output("drug-search-dropdown", "options"),
-    Input("drug-search-dropdown", "search_value"),
-    State("drug-search-dropdown", "value")
+        Output("drug-search-dropdown", "options"),
+        Input("drug-search-dropdown", "search_value"),
+        State("drug-search-dropdown", "value")
     )
     def update_options(search_value, current_value):
         options = []
@@ -51,7 +53,6 @@ def register_callbacks(app):
                     for _, row in df.iterrows()
                 ]
 
-        # Keep the selected value in options so Dash does not clear it
         if current_value and all(opt["value"] != current_value for opt in options):
             try:
                 name, rxcui = current_value.split("|", 1)
@@ -61,27 +62,50 @@ def register_callbacks(app):
 
         return options
 
-
     # ------------------------------------------------------------
     # 2) SAVE SELECTED DRUG
     # ------------------------------------------------------------
     @app.callback(
-    Output("selected-drug-store", "data"),
-    Input("drug-search-dropdown", "value"),
-    State("selected-drug-store", "data"),
-    prevent_initial_call=True
+        Output("selected-drug-store", "data"),
+        [
+            Input("drug-search-dropdown", "value"),
+            Input("sample-drug-buttons", "value"),
+        ],
+        State("selected-drug-store", "data"),
+        prevent_initial_call=False
     )
-    def save_selection(selected_value, current_store):
-        if not selected_value:
+    def save_selection(search_value, sample_value, current_store):
+        trigger_id = ctx.triggered_id
+
+        # Initial page load: use Tylenol default from sample buttons
+        if trigger_id is None:
+            if sample_value:
+                resolved = Searchbar_exact_product(sample_value)
+                if resolved:
+                    return resolved
             return current_store
 
-        try:
-            name, rxcui = selected_value.split("|", 1)
-        except ValueError:
+        if trigger_id == "sample-drug-buttons":
+            if not sample_value:
+                return current_store
+
+            resolved = Searchbar_exact_product(sample_value)
+            if resolved:
+                return resolved
             return current_store
 
-        return {"id": str(rxcui), "name": name}
+        if trigger_id == "drug-search-dropdown":
+            if not search_value:
+                return current_store
 
+            try:
+                name, rxcui = search_value.split("|", 1)
+            except ValueError:
+                return current_store
+
+            return {"id": str(rxcui), "name": name}
+
+        return current_store
 
     # ------------------------------------------------------------
     # 3) DRUG INFO CARD + INGREDIENT STORES
@@ -93,7 +117,7 @@ def register_callbacks(app):
             Output("ingredient-names-store", "data"),
         ],
         Input("selected-drug-store", "data"),
-        prevent_initial_call=True
+        prevent_initial_call=False
     )
     def update_drug_info_card(stored_data):
         if not stored_data:
@@ -122,7 +146,6 @@ def register_callbacks(app):
 
         return layout, ing_ids, ing_names
 
-
     # ------------------------------------------------------------
     # 4) COMPUTE exact + related ONCE AND STORE
     # ------------------------------------------------------------
@@ -132,7 +155,7 @@ def register_callbacks(app):
             Input("ingredient-ids-store", "data"),
             State("selected-drug-store", "data"),
         ],
-        prevent_initial_call=True
+        prevent_initial_call=False
     )
     def compute_matches(ing_ids, selected_drug):
         if not ing_ids or not selected_drug:
@@ -153,10 +176,8 @@ def register_callbacks(app):
             "related": related_df.to_dict("records") if related_df is not None else [],
         }
 
-
     # ------------------------------------------------------------
-    # 5) SHOW TOP5 EXACT + CONTROL THE OPEN MODAL BUTTON
-    #    open-modal MUST exist in layout initially (hidden)
+    # 5) SHOW TOP5 EXACT + CONTROL BUTTON
     # ------------------------------------------------------------
     @app.callback(
         [
@@ -165,7 +186,7 @@ def register_callbacks(app):
             Output("open-modal", "style"),
         ],
         Input("matches-store", "data"),
-        prevent_initial_call=True
+        prevent_initial_call=False
     )
     def display_exact_matches(matches_data):
         hide_style = {"display": "none"}
@@ -191,7 +212,6 @@ def register_callbacks(app):
             )
 
         return html.Div([list_items]), "View all", hide_style
-
 
     # ------------------------------------------------------------
     # 6) MODAL TOGGLE
@@ -230,9 +250,8 @@ def register_callbacks(app):
 
         return is_open, no_update
 
-
     # ------------------------------------------------------------
-    # 7) BUILD heatmap_df ONCE (store it)
+    # 7) BUILD heatmap_df ONCE
     # ------------------------------------------------------------
     @app.callback(
         Output("heatmap-df-store", "data"),
@@ -240,7 +259,7 @@ def register_callbacks(app):
             Input("matches-store", "data"),
             State("selected-drug-store", "data"),
         ],
-        prevent_initial_call=True
+        prevent_initial_call=False
     )
     def build_heatmap_df(matches_data, selected_drug):
         if not matches_data or not selected_drug:
@@ -265,9 +284,8 @@ def register_callbacks(app):
 
         return heatmap_df.to_dict("records")
 
-
     # ------------------------------------------------------------
-    # 8) LINKED UMAP + HEATMAP — from stored heatmap_df
+    # 8) LINKED UMAP + HEATMAP
     # ------------------------------------------------------------
     @app.callback(
         Output("linked-plot-iframe", "srcDoc"),
@@ -275,10 +293,20 @@ def register_callbacks(app):
             Input("heatmap-df-store", "data"),
             State("selected-drug-store", "data"),
         ],
-        prevent_initial_call=True
+        prevent_initial_call=False
     )
     def update_linked_plot(heatmap_records, selected_drug):
-        if not heatmap_records or not selected_drug:
+        if not selected_drug:
+            return "<h4>No data available for linked plot</h4>"
+
+        drug_name = selected_drug.get("name", "")
+
+        if is_precomputed_sample(drug_name):
+            precomputed_html = get_precomputed_html(drug_name)
+            if precomputed_html:
+                return precomputed_html
+
+        if not heatmap_records:
             return "<h4>No data available for linked plot</h4>"
 
         heatmap_df = pd.DataFrame(heatmap_records)
@@ -295,15 +323,14 @@ def register_callbacks(app):
 
         return chart.to_html()
 
-
     # ------------------------------------------------------------
-    # 9) BAR (THIRD) — from stored heatmap_df
+    # 9) BAR CHARTS
     # ------------------------------------------------------------
     @app.callback(
         Output("ingredient-bar-iframe", "srcDoc"),
         Output("combination-bar-iframe", "srcDoc"),
         Input("heatmap-df-store", "data"),
-        prevent_initial_call=True
+        prevent_initial_call=False
     )
     def update_bar(heatmap_records):
         if not heatmap_records:
@@ -317,7 +344,9 @@ def register_callbacks(app):
 
         return ingredient_chart.to_html(), combination_chart.to_html()
 
-
+    # ------------------------------------------------------------
+    # 10) TOGGLE MAIN VIEW
+    # ------------------------------------------------------------
     @app.callback(
         Output("linked-plot-container", "style"),
         Output("bar-charts-container", "style"),
