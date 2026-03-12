@@ -322,16 +322,27 @@ def Fetch_Ingredients(ID):
 
     return pd.DataFrame(parsed_data)
 
+
 def Fetch_Dose_Form(ID):
     query = text("""
         SELECT c.STR
         FROM RXNCONSO c
-        JOIN RXNREL r ON c.RXCUI = r.RXCUI2
-        WHERE r.RXCUI1 = :id AND c.TTY = 'DF'
+        JOIN RXNREL r
+            ON c.RXCUI = r.RXCUI2
+        WHERE r.RXCUI2 = :id
+          AND r.RELA = 'consists_of'
     """)
     with engine.connect() as conn:
-        res = pd.read_sql(query, conn, params={"id": ID})
-    return res["STR"].iloc[0] if not res.empty else "Not specified"
+        res = pd.read_sql(query, conn, params={'id': ID})
+    if res.empty:
+        return "Not specified"
+    s = res["STR"].iloc[0]
+    match = re.search(r'([A-Z0-9 ,]+)(?=\s*\[)', s)
+    if match:
+        return match.group(1).strip().title()
+    return "Not specified"
+
+
 
 def Fetch_Generic_Name(ID):
     query = text("""
@@ -429,7 +440,7 @@ def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
         .merge(id_df, on="Product_Name", how="left")
     )
 
-    heatmap_df["Dose_Form"] = None
+    heatmap_df['Dose_Form'] = heatmap_df['ID'].apply(Fetch_Dose_Form)
     return heatmap_df
 
 # =========================================================
