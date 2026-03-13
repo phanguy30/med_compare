@@ -307,7 +307,8 @@ def _build_default_heatmap_layers(
             labelAngle=-40,
             labelFontSize=12,
             titleFontSize=13,
-            labelLimit=180
+            labelLimit=180,
+            title = "Active Ingredients"
             ),
             sort=default_ingredients,
             scale=alt.Scale(padding=0)
@@ -395,7 +396,8 @@ def _build_brushed_heatmap_layers(
             labelAngle=-40,
             labelFontSize=12,
             titleFontSize=13,
-            labelLimit=180
+            labelLimit=180,
+            title = "Active Ingredients"
             ),
             sort=brushed_ingredients,
             scale=alt.Scale(padding=0)
@@ -415,7 +417,8 @@ def _build_brushed_heatmap_layers(
             labelAngle=-40,
             labelFontSize=12,
             titleFontSize=13,
-            labelLimit=180
+            labelLimit=180,
+            title = "Active Ingredients"
             ),
             sort=brushed_ingredients,
             scale=alt.Scale(padding=0)
