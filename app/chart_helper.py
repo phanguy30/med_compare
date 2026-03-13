@@ -303,7 +303,12 @@ def _build_default_heatmap_layers(
     ).encode(
         x=alt.X(
             'Ingredient:N',
-            axis=alt.Axis(labelAngle=-45),
+            axis=alt.Axis(
+            labelAngle=-40,
+            labelFontSize=12,
+            titleFontSize=13,
+            labelLimit=180
+            ),
             sort=default_ingredients,
             scale=alt.Scale(padding=0)
         ),
@@ -312,7 +317,10 @@ def _build_default_heatmap_layers(
 
     row_bands = alt.Chart(df_rows_default).transform_filter(
         no_brush
-    ).mark_rect().encode(
+    ).mark_rect(
+    stroke='white',
+    strokeWidth=1
+    ).encode(
         x=alt.X('x_start:N', sort=default_ingredients, scale=alt.Scale(padding=0), title=None),
         x2='x_end:N',
         y=alt.Y('Product_Name:N', sort=default_product_order),
@@ -337,19 +345,23 @@ def _build_default_heatmap_layers(
     )
 
     highlight_zeros = base.transform_filter(
-        alt.datum.is_selected & (alt.datum.Concentration == 0)
-    ).mark_rect().encode(
-        color=alt.value('#f8d7da')
+    alt.datum.is_selected & (alt.datum.Concentration == 0)
+    ).mark_rect(
+    stroke='white',
+    strokeWidth=1
+    ).encode(
+    color=alt.value('#edf2f7')
     )
 
     nonzero_layer = base.transform_filter(
-        alt.datum.Concentration > 0
-    ).mark_rect().encode(
-        color=alt.Color(
-            'Relative_Conc:Q',
-            scale=alt.Scale(scheme='reds', domain=[0, 1]),
-            title='Relative Concentration'
-        ),
+    alt.datum.Concentration > 0).mark_rect(
+    stroke='white',
+    strokeWidth=1).encode(
+    color=alt.Color(
+        'Relative_Conc:Q',
+        scale=alt.Scale(scheme='blues', domain=[0, 1]),
+        title='Relative Concentration'
+    ),
         tooltip=[
             alt.Tooltip('Product_Name:N', title='Product'),
             alt.Tooltip('ID:N', title='ID'),
@@ -360,12 +372,12 @@ def _build_default_heatmap_layers(
     )
 
     selected_outline = base.transform_filter(
-        alt.datum.is_selected
+    alt.datum.is_selected
     ).mark_rect(
-        fillOpacity=0,
-        stroke='#2b6cb0',
-        strokeWidth=2,
-        strokeOpacity=1
+    fillOpacity=0,
+    stroke='white',
+    strokeWidth=2.2,
+    strokeOpacity=1
     )
 
     return row_bands + selected_row_band + highlight_zeros + nonzero_layer + selected_outline
@@ -389,7 +401,12 @@ def _build_brushed_heatmap_layers(
     ).encode(
         x=alt.X(
             'Ingredient:N',
-            axis=alt.Axis(labelAngle=-45),
+            axis=alt.Axis(
+            labelAngle=-40,
+            labelFontSize=12,
+            titleFontSize=13,
+            labelLimit=180
+            ),
             sort=brushed_ingredients,
             scale=alt.Scale(padding=0)
         ),
@@ -404,7 +421,12 @@ def _build_brushed_heatmap_layers(
     ).encode(
         x=alt.X(
             'Ingredient:N',
-            axis=alt.Axis(labelAngle=-45),
+            axis=alt.Axis(
+            labelAngle=-40,
+            labelFontSize=12,
+            titleFontSize=13,
+            labelLimit=180
+            ),
             sort=brushed_ingredients,
             scale=alt.Scale(padding=0)
         ),
@@ -416,7 +438,10 @@ def _build_brushed_heatmap_layers(
         has_brush
     ).transform_filter(
         brush
-    ).mark_rect().encode(
+    ).mark_rect(
+    stroke='white',
+    strokeWidth=1
+    ).encode(
         x=alt.X(
             'x_start:N',
             sort=brushed_ingredients,
@@ -454,18 +479,24 @@ def _build_brushed_heatmap_layers(
     # Brushed non-selected rows
     zero_layer_brushed = base_brushed.transform_filter(
         alt.datum.Concentration == 0
-    ).mark_rect().encode(
-        color=alt.value('#f8d7da')
+    ).mark_rect(
+    stroke='white',
+    strokeWidth=1
+    ).encode(
+        color=alt.value('#edf2f7')
     )
 
     nonzero_layer_brushed = base_brushed.transform_filter(
-        alt.datum.Concentration > 0
-    ).mark_rect().encode(
-        color=alt.Color(
-            'Relative_Conc:Q',
-            scale=alt.Scale(scheme='reds', domain=[0, 1]),
-            title='Relative Concentration'
-        ),
+    alt.datum.Concentration > 0
+    ).mark_rect(
+    stroke='white',
+    strokeWidth=1
+    ).encode(
+    color=alt.Color(
+        'Relative_Conc:Q',
+        scale=alt.Scale(scheme='blues', domain=[0, 1]),
+        title='Relative Concentration'
+    ),
         tooltip=[
             alt.Tooltip('Product_Name:N', title='Product'),
             alt.Tooltip('ID:N', title='ID'),
@@ -479,33 +510,42 @@ def _build_brushed_heatmap_layers(
         ~alt.datum.is_selected
     ).mark_rect(
         fillOpacity=0,
-        stroke='red',
+        stroke='white',
         strokeWidth=2.0,
         strokeOpacity=1
     )
 
     text_brushed = base_brushed.transform_filter(
-        alt.datum.Concentration > 0
-    ).mark_text(fontSize=10).encode(
-        text=alt.Text('Concentration:Q', format='.0f'),
-        color=alt.value('black')
+    alt.datum.Concentration > 0
+    ).mark_text(
+    fontSize=11,
+    fontWeight='bold'
+    ).encode(
+    text=alt.Text('Concentration:Q', format='.0f'),
+    color=alt.value('white')
     )
 
     # Selected row overlay
     zero_layer_selected = base_selected.transform_filter(
         alt.datum.Concentration == 0
-    ).mark_rect().encode(
+    ).mark_rect(
+    stroke='white',
+    strokeWidth=1
+    ).encode(
         color=alt.value('#f8d7da')
     )
 
     nonzero_layer_selected = base_selected.transform_filter(
-        alt.datum.Concentration > 0
-    ).mark_rect().encode(
-        color=alt.Color(
-            'Relative_Conc:Q',
-            scale=alt.Scale(scheme='reds', domain=[0, 1]),
-            title='Relative Concentration'
-        ),
+    alt.datum.Concentration > 0
+    ).mark_rect(
+    stroke='white',
+    strokeWidth=1
+    ).encode(
+    color=alt.Color(
+        'Relative_Conc:Q',
+        scale=alt.Scale(scheme='blues', domain=[0, 1]),
+        title='Relative Concentration'
+    ),
         tooltip=[
             alt.Tooltip('Product_Name:N', title='Product'),
             alt.Tooltip('ID:N', title='ID'),
@@ -523,10 +563,13 @@ def _build_brushed_heatmap_layers(
     )
 
     text_selected = base_selected.transform_filter(
-        alt.datum.Concentration > 0
-    ).mark_text(fontSize=10).encode(
-        text=alt.Text('Concentration:Q', format='.0f'),
-        color=alt.value('black')
+    alt.datum.Concentration > 0
+    ).mark_text(
+    fontSize=11,
+    fontWeight='bold'
+    ).encode(
+    text=alt.Text('Concentration:Q', format='.0f'),
+    color=alt.value('white')
     )
 
     return (

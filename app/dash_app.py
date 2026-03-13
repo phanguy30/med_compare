@@ -8,17 +8,7 @@ from app.layout import create_layout
 from app.ui_callbacks import register_callbacks
 from app.helpers import ensure_sqlite_indexes
 
-def warm_umap():
-    X_dummy = np.random.rand(20, 5).astype("float32")
-    reducer = umap.UMAP(
-        n_neighbors=5,
-        min_dist=0.3,
-        n_components=2,
-        random_state=42,
-        low_memory=True,
-        n_jobs=1
-    )
-    reducer.fit_transform(X_dummy)
+
 
 app = Dash(
     __name__,
@@ -29,7 +19,6 @@ app = Dash(
 server = app.server
 
 ensure_sqlite_indexes()
-warm_umap()
 
 app.layout = create_layout()
 register_callbacks(app)

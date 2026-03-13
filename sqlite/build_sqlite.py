@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text
 MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
 MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PSWD = os.getenv("MYSQL_PSWD", "2316")
+MYSQL_PSWD = os.getenv("MYSQL_PSWD", "")
 MYSQL_DB   = os.getenv("MYSQL_DB", "rxnorm")
 
 mysql_engine = create_engine(
@@ -16,16 +16,16 @@ sqlite_engine = create_engine("sqlite:///rxnorm.sqlite")
 
 # 1) RXNCONSO subset 
 rxnconso = pd.read_sql(text("""
-    SELECT RXCUI, STR, TTY, LAT
+    SELECT RXCUI, STR, TTY
     FROM RXNCONSO
-    WHERE TTY IN ('DP','SCDC','DF','MIN')
+    WHERE TTY IN ('DP','SCDC','DF')
 """), mysql_engine)
 
 # 2) RXNREL subset 
 rxnrel = pd.read_sql(text("""
     SELECT RXCUI1, RXCUI2, RELA
     FROM RXNREL
-    WHERE RELA IN ('has_ingredient', 'constitutes', 'has_doseform', 'has_doseform_of', 'consists_of')
+    WHERE RELA IN ('has_ingredient', 'constitutes', 'dose_form_of', 'consists_of')
 """), mysql_engine)
 
 # Write to SQLite
