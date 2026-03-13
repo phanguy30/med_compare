@@ -615,7 +615,7 @@ def Create_Linked_UMAP_Heatmap(
     heatmap_chart = (
         default_layers + brushed_layers
     ).properties(
-        width=900,
+        width=700,
         height=450,
         title=f"Ingredient Concentration Heatmap (Default: {highlight_title} + top {max_related})"
     )
