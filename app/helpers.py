@@ -335,18 +335,6 @@ def Fetch_Dose_Form(ID):
 
     with engine.connect() as conn:
         res = pd.read_sql(query, conn, params={'id': ID})
-
-
-    if res.empty:
-        return "Not specified"
-
-    s = res["STR"].iloc[0]
-
-    match = re.search(r'([A-Z0-9 ,]+)(?=\s*\[)', s)
-    if match:
-        return match.group(1).strip().title()
-
-    return "Not specified"
     if res.empty:
         return "Not specified"
     s = res["STR"].iloc[0]
@@ -354,7 +342,6 @@ def Fetch_Dose_Form(ID):
     if match:
         return match.group(1).strip().title()
     return "Not specified"
-
 
 
 
@@ -480,7 +467,7 @@ def Create_Ingredient_Combination_Frequency_Bar(heatmap_df):
     chart = alt.Chart(combo_freq).mark_bar().encode(
         x=alt.X("Product_Count:Q", title="Number of Products"),
         y=alt.Y("Ingredient_Combination:N", sort="-x", title="Ingredient Combination"),
-        color=alt.Color("Product_Count:Q", scale=alt.Scale(scheme="blues"), title="Frequency"),
+        color=alt.Color("Product_Count:Q", scale=alt.Scale(scheme="reds"), title="Frequency"),
         tooltip=[
             alt.Tooltip("Ingredient_Combination:N", title="Combination"),
             alt.Tooltip("Product_Count:Q", title="Products with combination")
@@ -506,7 +493,7 @@ def Create_Ingredient_Frequency_Bar(heatmap_df):
     chart = alt.Chart(freq_df).mark_bar().encode(
         x=alt.X("Product_Count:Q", title="Number of Products"),
         y=alt.Y("Ingredient:N", sort="-x", title="Ingredient"),
-        color=alt.Color("Product_Count:Q", scale=alt.Scale(scheme="blues"), title="Frequency"),
+        color=alt.Color("Product_Count:Q", scale=alt.Scale(scheme="reds"), title="Frequency"),
         tooltip=[
             alt.Tooltip("Ingredient:N"),
             alt.Tooltip("Product_Count:Q", title="Products containing ingredient")
