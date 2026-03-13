@@ -248,8 +248,8 @@ def _build_umap_chart(plot_df, brush):
         color='steelblue',
         opacity=0.8
     ).encode(
-        x=alt.X('UMAP1_jitter:Q', title='UMAP Dimension 1'),
-        y=alt.Y('UMAP2_jitter:Q', title='UMAP Dimension 2'),
+        x=alt.X('UMAP1_jitter:Q', title= None),
+        y=alt.Y('UMAP2_jitter:Q', title= None),
         tooltip=tooltips
     )
 
@@ -400,7 +400,7 @@ def _build_brushed_heatmap_layers(
             sort=brushed_ingredients,
             scale=alt.Scale(padding=0)
         ),
-        y=alt.Y('Product_Name:N', sort=y_sort)
+        y=alt.Y('Product_Name:N', sort=y_sort, title = None)
     )
 
     # Selected row always included when brush is active
@@ -420,7 +420,7 @@ def _build_brushed_heatmap_layers(
             sort=brushed_ingredients,
             scale=alt.Scale(padding=0)
         ),
-        y=alt.Y('Product_Name:N', sort=y_sort)
+        y=alt.Y('Product_Name:N', sort=y_sort, title = None)
     )
 
     # Row bands for brushed rows
@@ -439,7 +439,7 @@ def _build_brushed_heatmap_layers(
             title=None
         ),
         x2='x_end:N',
-        y=alt.Y('Product_Name:N', sort=y_sort),
+        y=alt.Y('Product_Name:N', sort=y_sort, title=None),
         color=alt.condition(
             alt.datum.is_odd,
             alt.value('#f3f3f3'),
@@ -456,7 +456,7 @@ def _build_brushed_heatmap_layers(
         color='#cfe8ff',
         opacity=0.45
     ).encode(
-        y=alt.Y('Product_Name:N', sort=y_sort)
+        y=alt.Y('Product_Name:N', sort=y_sort, title=None)
     )
 
 
@@ -548,7 +548,7 @@ def _build_brushed_heatmap_layers(
         stroke='#2b6cb0',
         strokeWidth=3
     ).encode(
-        y=alt.Y('Product_Name:N', sort=y_sort)
+        y=alt.Y('Product_Name:N', sort=y_sort, title=None)
     )
 
     text_selected = base_selected.transform_filter(
