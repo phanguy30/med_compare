@@ -87,3 +87,9 @@ The app uses structured ingredient relationships to compute similarity and visua
 The following image illustrates the final version of the Med-Compare Dashboard:
 
 ![](assets/Images/Dashboard_Preview.jpeg)
+
+## Deployment
+
+The Dashboard has been deployed in Render to make our Med-Compare project accessible to everyone.
+
+Feel free to view our deployed version on ![Render](https://med-compare1.onrender.com/)
