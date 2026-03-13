@@ -36,16 +36,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "rxnorm.sqlite"
 PRECOMPUTED_DIR = BASE_DIR / "assets" / "precomputed"
 
-PRECOMPUTED_DRUGS = {
-    "tylenol": {
-        "display_name": "Tylenol",
-        "html_file": PRECOMPUTED_DIR / "tylenol_linked_plot.html",
-    },
-    "excedrin": {
-        "display_name": "Excedrin",
-        "html_file": PRECOMPUTED_DIR / "excedrin_linked_plot.html",
-    },
-}
+
 
 # =========================================================
 # DATABASE
@@ -74,27 +65,39 @@ def ensure_sqlite_indexes():
 # =========================================================
 # PRECOMPUTED SAMPLE HELPERS
 # =========================================================
-def is_precomputed_sample(drug_name):
-    if not drug_name:
-        return False
-    return str(drug_name).strip().lower() in PRECOMPUTED_DRUGS
+PRECOMPUTED_DRUGS = {
+    "1098496": {
+        "display_name": "Tylenol",
+        "html_file": PRECOMPUTED_DIR / "tylenol_linked_plot.html",
+    },
+    "1593116": {
+        "display_name": "Excedrin",
+        "html_file": PRECOMPUTED_DIR / "excedrin_linked_plot.html",
+    },
+}
 
-def get_precomputed_html(drug_name):
-    if not drug_name:
+def is_precomputed_sample(drug_id):
+    if not drug_id:
+        return False
+    return str(drug_id).strip() in PRECOMPUTED_DRUGS
+
+def get_precomputed_html(drug_id):
+    if not drug_id:
         return None
 
-    key = str(drug_name).strip().lower()
+    key = str(drug_id).strip()
     meta = PRECOMPUTED_DRUGS.get(key)
 
     if not meta:
         return None
 
     html_path = meta["html_file"]
+
     if html_path.exists():
         return html_path.read_text(encoding="utf-8")
 
+    print(f"DEBUG missing precomputed file: {html_path}")
     return None
-
 # =========================================================
 # SEARCH HELPERS
 # =========================================================
