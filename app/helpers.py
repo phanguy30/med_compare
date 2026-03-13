@@ -335,7 +335,7 @@ def Fetch_Dose_Form(ID):
 
     with engine.connect() as conn:
         res = pd.read_sql(query, conn, params={'id': ID})
-<<<<<<< HEAD
+
 
     if res.empty:
         return "Not specified"
@@ -347,7 +347,6 @@ def Fetch_Dose_Form(ID):
         return match.group(1).strip().title()
 
     return "Not specified"
-=======
     if res.empty:
         return "Not specified"
     s = res["STR"].iloc[0]
@@ -357,7 +356,7 @@ def Fetch_Dose_Form(ID):
     return "Not specified"
 
 
->>>>>>> origin/main
+
 
 def Fetch_Generic_Name(ID):
     query = text("""

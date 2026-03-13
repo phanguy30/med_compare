@@ -371,15 +371,24 @@ def _build_default_heatmap_layers(
         ]
     )
 
-    selected_outline = base.transform_filter(
+    selected_outline = alt.Chart(df_rows_default).transform_filter(
+    no_brush
+    ).transform_filter(
     alt.datum.is_selected
     ).mark_rect(
     fillOpacity=0,
-    stroke='white',
-    strokeWidth=2.2,
-    strokeOpacity=1
+    stroke='#2b6cb0',
+    strokeWidth=2
+    ).encode(
+    x=alt.X(
+        'x_start:N',
+        sort=default_ingredients,
+        scale=alt.Scale(paddingInner=0, paddingOuter=0),
+        title=None
+    ),
+    x2='x_end:N',
+    y=alt.Y('Product_Name:N', sort=default_product_order)
     )
-
     return row_bands + selected_row_band + highlight_zeros + nonzero_layer + selected_outline
 
 
@@ -555,11 +564,18 @@ def _build_brushed_heatmap_layers(
         ]
     )
 
-    selected_outline = base_selected.mark_rect(
-        fillOpacity=0,
-        stroke='#2b6cb0',
-        strokeWidth=2.5,
-        strokeOpacity=1
+    selected_outline = alt.Chart(df_rows_brushed).transform_filter(
+    has_brush
+    ).transform_filter(
+    alt.datum.is_selected
+    ).mark_rect(
+    fillOpacity=0,
+    stroke='#2b6cb0',
+    strokeWidth=3
+    ).encode(
+    x=alt.X('x_start:N', sort=brushed_ingredients, scale=alt.Scale(padding=0)),
+    x2='x_end:N',
+    y=alt.Y('Product_Name:N', sort=y_sort)
     )
 
     text_selected = base_selected.transform_filter(
@@ -581,6 +597,5 @@ def _build_brushed_heatmap_layers(
         + text_brushed
         + zero_layer_selected
         + nonzero_layer_selected
-        + selected_outline
         + text_selected
     )

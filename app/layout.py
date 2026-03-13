@@ -13,92 +13,118 @@ def create_layout():
         dcc.Store(id="matches-store"),
         dcc.Store(id="heatmap-df-store"),
 
-        html.H2("Drug Explorer", className="my-4"),
+        html.H2("Drug Explorer", className="my-2"),
 
         # ----------------------------
         # QUICK SAMPLE DRUGS
         # ----------------------------
-        html.H5("Quick Sample Drugs", className="mb-3"),
-        dbc.RadioItems(
-            id="sample-drug-buttons",
-            className="btn-group mb-3",
-            inputClassName="btn-check",
-            labelClassName="btn btn-outline-primary",
-            labelCheckedClassName="active",
-            options=[
-                {"label": "Tylenol", "value": "Tylenol"},
-                {"label": "Excedrin", "value": "Excedrin"},
-            ],
-            value="Tylenol",
-        ),
+        dbc.Row([
+            dbc.Col([
+                html.Div([
+                    html.H5(
+                        "Quick Sample Drugs",
+                        className="mb-0 me-3"
+                    ),
+                    dbc.RadioItems(
+                        id="sample-drug-buttons",
+                        className="btn-group",
+                        inputClassName="btn-check",
+                        labelClassName="btn btn-outline-primary btn-sm",
+                        labelCheckedClassName="active",
+                        options=[
+                            {"label": "Tylenol", "value": "Tylenol"},
+                            {"label": "Excedrin", "value": "Excedrin"},
+                        ],
+                        value="Tylenol",
+                    ),
+                ], className="d-flex align-items-center flex-wrap gap-2")
+            ], md=12),
+        ], className="mb-2"),
 
         # ----------------------------
         # SEARCH
         # ----------------------------
-        html.H5("Search Any Drug", className="mb-2"),
+        html.H5("Search Any Drug", className="mb-1"),
         dcc.Dropdown(
             id="drug-search-dropdown",
-            placeholder="Search for a drug..."
+            placeholder="Search for a drug...",
+            style={"marginBottom": "8px"}
         ),
 
-        html.Hr(),
+        html.Hr(className="my-2"),
 
         # =========================================================
         # ROW 1: Drug Info (left) + Exact Matches (right)
         # =========================================================
         dbc.Row([
             dbc.Col([
-                html.H4("Drug Information", className="mb-3"),
+                html.H4("Drug Information", className="mb-2"),
                 dbc.Card(
                     dbc.CardBody(
-                        html.Div(id="drug-info-content")
+                        html.Div(
+                            id="drug-info-content",
+                            style={
+                                "fontSize": "0.92rem",
+                                "lineHeight": "1.35"
+                            }
+                        ),
+                        style={"padding": "0.75rem"}
                     ),
                     className="shadow-sm"
                 ),
             ], md=6),
 
             dbc.Col([
-                html.H4("Exact Matches"),
-                html.Div(id="exact-matches-content"),
-
+                html.H4("Exact Matches", className="mb-2"),
+                html.Div(
+                    id="exact-matches-content",
+                    style={
+                        "fontSize": "0.92rem",
+                        "lineHeight": "1.35"
+                    }
+                ),
                 dbc.Button(
                     "View all equivalents...",
                     id="open-modal",
                     color="link",
                     size="sm",
-                    className="mt-2 p-0",
+                    className="mt-1 p-0",
                     style={"display": "none"}
                 ),
             ], md=6),
-
-        ], className="mb-4"),
+        ], className="mb-2"),
 
         # =========================================================
         # VIEW TOGGLE
         # =========================================================
         dbc.Row([
             dbc.Col([
-                html.H4("Similar Product Discovery", className="mb-3"),
-                dbc.RadioItems(
-                    id="main-view-toggle",
-                    className="btn-group",
-                    inputClassName="btn-check",
-                    labelClassName="btn btn-outline-primary",
-                    labelCheckedClassName="active",
-                    options=[
-                        {
-                            "label": "Similarity + Heatmap",
-                            "value": "linked_plot"
-                        },
-                        {
-                            "label": "Alternative Combinations",
-                            "value": "bar_charts"
-                        },
-                    ],
-                    value="linked_plot",
-                ),
+                html.Div([
+                    html.H4(
+                        "Similar Product Discovery",
+                        className="mb-0 me-3"
+                    ),
+                    dbc.RadioItems(
+                        id="main-view-toggle",
+                        className="btn-group",
+                        inputClassName="btn-check",
+                        labelClassName="btn btn-outline-primary btn-sm",
+                        labelCheckedClassName="active",
+                        options=[
+                            {
+                                "label": "Similarity + Heatmap",
+                                "value": "linked_plot"
+                            },
+                            {
+                                "label": "Alternative Combinations",
+                                "value": "bar_charts"
+                            },
+                        ],
+                        value="linked_plot",
+                    ),
+                ], className="d-flex align-items-center flex-wrap gap-2")
             ], md=12),
-        ], className="mb-3"),
+        ], className="mb-2"),
 
         # =========================================================
         # LINKED UMAP + HEATMAP
@@ -112,12 +138,14 @@ def create_layout():
                             id="linked-plot-iframe",
                             style={
                                 "width": "100%",
-                                "height": "900px",
+                                "height": "68vh",
+                                "minHeight": "520px",
+                                "maxHeight": "760px",
                                 "border": "none"
                             }
                         ),
                     ], md=12),
-                ], className="mb-4"),
+                ], className="mb-2"),
             ],
             style={"display": "block"},
         ),
@@ -126,35 +154,39 @@ def create_layout():
         # BAR CHARTS
         # =========================================================
         html.Div(
-        id="bar-charts-container",
-        children=[
-            dbc.Row([
-                dbc.Col([
-                    html.H5("Ingredient Frequency", className="mb-2"),
-                    html.Iframe(
-                        id="ingredient-bar-iframe",
-                        style={
-                            "width": "100%",
-                            "height": "500px",
-                            "border": "none"
-                               },
-                                ),
-                            ], md=6),
+            id="bar-charts-container",
+            children=[
+                dbc.Row([
+                    dbc.Col([
+                        html.H5("Ingredient Frequency", className="mb-1"),
+                        html.Iframe(
+                            id="ingredient-bar-iframe",
+                            style={
+                                "width": "100%",
+                                "height": "42vh",
+                                "minHeight": "320px",
+                                "maxHeight": "420px",
+                                "border": "none"
+                            },
+                        ),
+                    ], md=6),
 
-                            dbc.Col([
-                            html.H5("Combination Frequency", className="mb-2"),
-                            html.Iframe(
+                    dbc.Col([
+                        html.H5("Combination Frequency", className="mb-1"),
+                        html.Iframe(
                             id="combination-bar-iframe",
                             style={
-                            "width": "100%",
-                            "height": "500px",
-                            "border": "none"
+                                "width": "100%",
+                                "height": "42vh",
+                                "minHeight": "320px",
+                                "maxHeight": "420px",
+                                "border": "none"
                             },
-                            ),
-                 ], md=6),
-              ], className="mb-4"),
-          ],
-          style={"display": "none"},
+                        ),
+                    ], md=6),
+                ], className="mb-2"),
+            ],
+            style={"display": "none"},
         ),
 
         # ----------------------------
@@ -173,4 +205,4 @@ def create_layout():
             is_open=False,
         ),
 
-    ], fluid=True)
+    ], fluid=True, className="px-2 py-2")
