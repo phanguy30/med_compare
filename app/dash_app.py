@@ -13,7 +13,8 @@ from app.helpers import ensure_sqlite_indexes
 app = Dash(
     __name__,
     external_stylesheets=[dbc.themes.CERULEAN],
-    suppress_callback_exceptions=True
+    suppress_callback_exceptions=True,
+    title="Drug Explorer"
 )
 
 server = app.server
