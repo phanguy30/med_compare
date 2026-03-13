@@ -283,8 +283,8 @@ def _build_umap_chart(plot_df, brush):
         (base_points + initial_highlight + brushed_highlight)
         .add_params(brush)
         .properties(
-            width=600,
-            height=420,
+            width=580,
+            height=450,
             title='Drug Similarity Clustering (UMAP) — drag to select products'
         )
     )
@@ -331,18 +331,6 @@ def _build_default_heatmap_layers(
         )
     )
 
-    selected_row_band = alt.Chart(df_rows_default).transform_filter(
-        no_brush
-    ).transform_filter(
-        alt.datum.is_selected
-    ).mark_rect(
-        color='#cfe8ff',
-        opacity=0.45
-    ).encode(
-        x=alt.X('x_start:N', sort=default_ingredients, scale=alt.Scale(padding=0), title=None),
-        x2='x_end:N',
-        y=alt.Y('Product_Name:N', sort=default_product_order)
-    )
 
     highlight_zeros = base.transform_filter(
     alt.datum.is_selected & (alt.datum.Concentration == 0)
@@ -372,24 +360,17 @@ def _build_default_heatmap_layers(
     )
 
     selected_outline = alt.Chart(df_rows_default).transform_filter(
-    no_brush
+        no_brush
     ).transform_filter(
-    alt.datum.is_selected
+        alt.datum.is_selected
     ).mark_rect(
-    fillOpacity=0,
-    stroke='#2b6cb0',
-    strokeWidth=2
+        fillOpacity=0,
+        stroke='#2b6cb0',
+        strokeWidth=2
     ).encode(
-    x=alt.X(
-        'x_start:N',
-        sort=default_ingredients,
-        scale=alt.Scale(paddingInner=0, paddingOuter=0),
-        title=None
-    ),
-    x2='x_end:N',
-    y=alt.Y('Product_Name:N', sort=default_product_order)
+        y=alt.Y('Product_Name:N', sort=default_product_order)
     )
-    return row_bands + selected_row_band + highlight_zeros + nonzero_layer + selected_outline
+    return row_bands + highlight_zeros + nonzero_layer + selected_outline
 
 
 def _build_brushed_heatmap_layers(
@@ -468,22 +449,16 @@ def _build_brushed_heatmap_layers(
 
     # Blue row band for selected drug
     selected_row_band = alt.Chart(df_rows_brushed).transform_filter(
-        has_brush
+    has_brush
     ).transform_filter(
         alt.datum.is_selected
     ).mark_rect(
         color='#cfe8ff',
         opacity=0.45
     ).encode(
-        x=alt.X(
-            'x_start:N',
-            sort=brushed_ingredients,
-            scale=alt.Scale(padding=0),
-            title=None
-        ),
-        x2='x_end:N',
         y=alt.Y('Product_Name:N', sort=y_sort)
     )
+
 
     # Brushed non-selected rows
     zero_layer_brushed = base_brushed.transform_filter(
@@ -567,15 +542,13 @@ def _build_brushed_heatmap_layers(
     selected_outline = alt.Chart(df_rows_brushed).transform_filter(
     has_brush
     ).transform_filter(
-    alt.datum.is_selected
+        alt.datum.is_selected
     ).mark_rect(
-    fillOpacity=0,
-    stroke='#2b6cb0',
-    strokeWidth=3
+        fillOpacity=0,
+        stroke='#2b6cb0',
+        strokeWidth=3
     ).encode(
-    x=alt.X('x_start:N', sort=brushed_ingredients, scale=alt.Scale(padding=0)),
-    x2='x_end:N',
-    y=alt.Y('Product_Name:N', sort=y_sort)
+        y=alt.Y('Product_Name:N', sort=y_sort)
     )
 
     text_selected = base_selected.transform_filter(
@@ -597,5 +570,6 @@ def _build_brushed_heatmap_layers(
         + text_brushed
         + zero_layer_selected
         + nonzero_layer_selected
+        + selected_outline
         + text_selected
     )

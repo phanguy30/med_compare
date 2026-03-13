@@ -470,7 +470,7 @@ def Create_Ingredient_Combination_Frequency_Bar(heatmap_df):
     chart = alt.Chart(combo_freq).mark_bar().encode(
         x=alt.X("Product_Count:Q", title="Number of Products"),
         y=alt.Y("Ingredient_Combination:N", sort="-x", title="Ingredient Combination"),
-        color=alt.Color("Product_Count:Q", scale=alt.Scale(scheme="reds"), title="Frequency"),
+        color=alt.Color("Product_Count:Q", scale=alt.Scale(scheme="blues"), title="Frequency"),
         tooltip=[
             alt.Tooltip("Ingredient_Combination:N", title="Combination"),
             alt.Tooltip("Product_Count:Q", title="Products with combination")
@@ -496,7 +496,7 @@ def Create_Ingredient_Frequency_Bar(heatmap_df):
     chart = alt.Chart(freq_df).mark_bar().encode(
         x=alt.X("Product_Count:Q", title="Number of Products"),
         y=alt.Y("Ingredient:N", sort="-x", title="Ingredient"),
-        color=alt.Color("Product_Count:Q", scale=alt.Scale(scheme="reds"), title="Frequency"),
+        color=alt.Color("Product_Count:Q", scale=alt.Scale(scheme="blues"), title="Frequency"),
         tooltip=[
             alt.Tooltip("Ingredient:N"),
             alt.Tooltip("Product_Count:Q", title="Products containing ingredient")
@@ -615,7 +615,7 @@ def Create_Linked_UMAP_Heatmap(
     heatmap_chart = (
         default_layers + brushed_layers
     ).properties(
-        width=900,
+        width=700,
         height=450,
         title=f"Ingredient Concentration Heatmap (Default: {highlight_title} + top {max_related})"
     )
