@@ -299,12 +299,16 @@ def register_callbacks(app):
         if not selected_drug:
             return "<h4>No data available for linked plot</h4>"
 
-        drug_name = selected_drug.get("name", "")
+        drug_id = str(selected_drug.get("id", ""))
 
-        if is_precomputed_sample(drug_name):
-            precomputed_html = get_precomputed_html(drug_name)
-            if precomputed_html:
-                return precomputed_html
+        try:
+            if is_precomputed_sample(drug_id):
+                precomputed_html = get_precomputed_html(drug_id)
+                if precomputed_html:
+                    print(f"DEBUG using precomputed html for drug_id={drug_id}")
+                    return precomputed_html
+        except Exception as e:
+            print("DEBUG precomputed load failed:", e)
 
         if not heatmap_records:
             return "<h4>No data available for linked plot</h4>"
@@ -316,12 +320,13 @@ def register_callbacks(app):
 
         chart = Create_Linked_UMAP_Heatmap(
             heatmap_df=heatmap_df,
-            drug_of_interest=str(selected_drug["id"]),
+            drug_of_interest=drug_id,
             match_by="ID",
             doseform_weight=2.0
         )
 
         return chart.to_html()
+
 
     # ------------------------------------------------------------
     # 9) BAR CHARTS
