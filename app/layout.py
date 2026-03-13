@@ -13,45 +13,52 @@ def create_layout():
         dcc.Store(id="matches-store"),
         dcc.Store(id="heatmap-df-store"),
 
-        html.H2("Drug Explorer", className="my-2"),
-
-        # ----------------------------
-        # QUICK SAMPLE DRUGS
-        # ----------------------------
+        # =========================================================
+        # HEADER ROW
+        # =========================================================
         dbc.Row([
+        dbc.Col(
+            html.H2("Drug Explorer", className="fw-semibold"),
+            md=12
+        )
+        ], className="align-items-center mb-3"),
+
+
+
+ 
+        # =========================================================
+        # SEARCH + QUICK SAMPLE ROW
+        # =========================================================
+        dbc.Row([
+
+            # Search
             dbc.Col([
-                html.Div([
-                    html.H5(
-                        "Quick Sample Drugs",
-                        className="mb-0 me-3"
-                    ),
-                    dbc.RadioItems(
-                        id="sample-drug-buttons",
-                        className="btn-group",
-                        inputClassName="btn-check",
-                        labelClassName="btn btn-outline-primary btn-sm",
-                        labelCheckedClassName="active",
-                        options=[
-                            {"label": "Tylenol", "value": "Tylenol"},
-                            {"label": "Excedrin", "value": "Excedrin"},
-                        ],
-                        value="Tylenol",
-                    ),
-                ], className="d-flex align-items-center flex-wrap gap-2")
-            ], md=12),
-        ], className="mb-2"),
+                html.H4("Search Any Drug", className="mb-1"),
+                dcc.Dropdown(
+                    id="drug-search-dropdown",
+                    placeholder="Search for a drug...",
+                ),
+            ], md=10),
 
-        # ----------------------------
-        # SEARCH
-        # ----------------------------
-        html.H5("Search Any Drug", className="mb-1"),
-        dcc.Dropdown(
-            id="drug-search-dropdown",
-            placeholder="Search for a drug...",
-            style={"marginBottom": "8px"}
-        ),
+            # Quick Samples
+            dbc.Col([
+                html.H4("Quick Samples", className="mb-1"),
 
-        html.Hr(className="my-2"),
+                dbc.RadioItems(
+                    id="sample-drug-buttons",
+                    className="d-flex gap-2 justify-content-start",
+                    inputClassName="btn-check",
+                    labelClassName="btn btn-outline-primary btn-sm",
+                    labelCheckedClassName="active",
+                    options=[
+                        {"label": "Tylenol", "value": "Tylenol"},
+                        {"label": "Excedrin", "value": "Excedrin"},
+                    ],
+                    value="Tylenol",
+                ),
+            ], md=2),
+
+        ], className="align-items-end mb-2"),
 
         # =========================================================
         # ROW 1: Drug Info (left) + Exact Matches (right)
@@ -97,32 +104,37 @@ def create_layout():
         # =========================================================
         # VIEW TOGGLE
         # =========================================================
+        # Title row
         dbc.Row([
             dbc.Col([
-                html.Div([
-                    html.H4(
-                        "Similar Product Discovery",
-                        className="mb-0 me-3"
-                    ),
-                    dbc.RadioItems(
-                        id="main-view-toggle",
-                        className="btn-group",
-                        inputClassName="btn-check",
-                        labelClassName="btn btn-outline-primary btn-sm",
-                        labelCheckedClassName="active",
-                        options=[
-                            {
-                                "label": "Similarity + Heatmap",
-                                "value": "linked_plot"
-                            },
-                            {
-                                "label": "Alternative Combinations",
-                                "value": "bar_charts"
-                            },
-                        ],
-                        value="linked_plot",
-                    ),
-                ], className="d-flex align-items-center flex-wrap gap-2")
+                html.H4(
+                    "Similar Product Discovery",
+                    className="mb-1"
+                )
+            ], md=12),
+        ]),
+
+        # Buttons row
+        dbc.Row([
+            dbc.Col([
+                dbc.RadioItems(
+                    id="main-view-toggle",
+                    className="btn-group d-flex justify-content-center",
+                    inputClassName="btn-check",
+                    labelClassName="btn btn-outline-primary btn-sm",
+                    labelCheckedClassName="active",
+                    options=[
+                        {
+                            "label": "Similarity + Heatmap",
+                            "value": "linked_plot"
+                        },
+                        {
+                            "label": "Alternative Combinations",
+                            "value": "bar_charts"
+                        },
+                    ],
+                    value="linked_plot",
+                ),
             ], md=12),
         ], className="mb-2"),
 
@@ -158,7 +170,6 @@ def create_layout():
             children=[
                 dbc.Row([
                     dbc.Col([
-                        html.H5("Ingredient Frequency", className="mb-1"),
                         html.Iframe(
                             id="ingredient-bar-iframe",
                             style={
@@ -172,7 +183,6 @@ def create_layout():
                     ], md=6),
 
                     dbc.Col([
-                        html.H5("Combination Frequency", className="mb-1"),
                         html.Iframe(
                             id="combination-bar-iframe",
                             style={
