@@ -134,9 +134,8 @@ def register_callbacks(app):
 
         layout = html.Div([
             html.H5(stored_data["name"], className="text-primary mb-3"),
-            html.P([html.Strong("Generic Formula:"), html.Br(), html.Small(generic_full_name)]),
             html.P([html.Strong("Dose Form:"), dose_form]),
-            html.P(html.Strong("Ingredients:")),
+            html.P(html.Strong("Active Ingredients or Generic Formulation :")),
             html.Ul([
                 html.Li(f"{row['Ingredient']} ({row.get('Concentration', '')} MG)")
                 for _, row in (ing_df.iterrows() if ing_df is not None else [])
