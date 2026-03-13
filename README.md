@@ -92,4 +92,4 @@ The following image illustrates the final version of the Med-Compare Dashboard:
 
 The Dashboard has been deployed in Render to make our Med-Compare project accessible to everyone.
 
-Feel free to view our deployed version on [Render]("https://med-compare1.onrender.com/")
+Feel free to view our deployed version on [Render](https://med-compare1.onrender.com/)
