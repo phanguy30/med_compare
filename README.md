@@ -1,5 +1,6 @@
 # Interactive Drug Identity & Comparison Dashboard
 
+
 ## Overview
 
 This project builds an interactive dashboard designed to clarify drug identity and compare formulations using standardized terminology from RxNorm. The goal of the app is not to provide medical advice, but to help users understand whether different drug products are truly distinct or simply marketed under different names.
@@ -11,6 +12,11 @@ Consumers frequently encounter multiple brand names for the same active ingredie
 The app focuses on formulation transparency and structural comparison through coordinated multi-panel visualization.
 
 ------------------------------------------------------------------------
+
+## Deployment
+
+The Dashboard has been deployed in Render to make our Med-Compare project accessible to everyone.
+Feel free to view our deployed version on [Render](https://med-compare1.onrender.com/)
 
 ## High-Level Interface Design
 
@@ -88,8 +94,4 @@ The following image illustrates the final version of the Med-Compare Dashboard:
 
 ![](assets/Images/Dashboard_Preview.jpeg)
 
-## Deployment
 
-The Dashboard has been deployed in Render to make our Med-Compare project accessible to everyone.
-
-Feel free to view our deployed version on [Render](https://med-compare1.onrender.com/)
