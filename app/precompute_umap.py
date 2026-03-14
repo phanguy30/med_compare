@@ -20,10 +20,39 @@ SAMPLE_DRUGS = [
     "Excedrin",
 ]
 
+
 def _to_str_id_list(lst):
+    """
+    Convert a sequence of IDs into a clean list of string values.
+
+    Any null or missing values are removed, and all remaining values are
+    converted to strings. This is useful before passing ingredient IDs into
+    helper functions that expect string identifiers.
+
+    Args:
+        lst: Iterable of values that may contain IDs and missing values.
+
+    Returns:
+        list[str]: List of non-null IDs converted to strings.
+    """
     return [str(x) for x in (lst or []) if pd.notna(x)]
 
+
 def build_sample(drug_name):
+    """
+    Build and save a precomputed linked UMAP + heatmap HTML file for one drug.
+
+    This function resolves the requested drug name to an RxNorm product,
+    fetches its ingredients, finds exact and related products, builds the
+    corresponding heatmap dataset, generates the linked Altair chart, and
+    writes the chart to an HTML file inside the precomputed assets directory.
+
+    Args:
+        drug_name (str): Name of the sample drug to precompute.
+
+    Returns:
+        None
+    """
     selected = Searchbar_exact_product(drug_name)
     if not selected:
         print(f"[SKIP] Could not resolve {drug_name}")
@@ -68,6 +97,7 @@ def build_sample(drug_name):
     output_file.write_text(chart.to_html(), encoding="utf-8")
 
     print(f"[OK] Saved {output_file}")
+
 
 if __name__ == "__main__":
     for drug in SAMPLE_DRUGS:

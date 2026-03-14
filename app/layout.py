@@ -1,7 +1,53 @@
 from dash import html, dcc
 import dash_bootstrap_components as dbc
 
+
 def create_layout():
+    """
+    Construct and return the main Dash layout for the Drug Explorer dashboard.
+
+    The layout organizes the interface into several functional sections:
+
+    1. Hidden Stores
+       - dcc.Store components used to persist intermediate data across callbacks
+         (selected drug, ingredients, matches, and heatmap dataframe).
+
+    2. Header
+       - Title section displaying the dashboard name.
+
+    3. Search + Quick Samples
+       - A searchable dropdown allowing users to find any RxNorm drug.
+       - Quick-access radio buttons for predefined example drugs
+         (Tylenol and Excedrin).
+
+    4. Drug Information + Exact Matches
+       - Left panel displays information about the selected drug.
+       - Right panel shows branded products that match the same
+         ingredient composition.
+
+    5. Visualization Mode Toggle
+       - Allows switching between:
+         • Linked similarity visualization (UMAP + ingredient heatmap)
+         • Ingredient frequency / combination bar charts.
+
+    6. Similarity Visualization (UMAP + Heatmap)
+       - Embedded iframe displaying the interactive linked visualization.
+
+    7. Ingredient Analysis Charts
+       - Two side-by-side bar charts showing:
+         • Ingredient frequency across products
+         • Ingredient combination frequency.
+
+    8. Modal Dialog
+       - Displays the full list of exact branded matches when the
+         "View all equivalents" button is clicked.
+
+    Returns
+    -------
+    dbc.Container
+        The complete responsive dashboard layout wrapped in a Bootstrap container.
+    """
+
     return dbc.Container([
 
         # ----------------------------
@@ -17,15 +63,12 @@ def create_layout():
         # HEADER ROW
         # =========================================================
         dbc.Row([
-        dbc.Col(
-            html.H2("Drug Explorer", className="fw-semibold"),
-            md=12
-        )
+            dbc.Col(
+                html.H2("Drug Explorer", className="fw-semibold"),
+                md=12
+            )
         ], className="align-items-center mb-3"),
 
-
-
- 
         # =========================================================
         # SEARCH + QUICK SAMPLE ROW
         # =========================================================
@@ -104,7 +147,6 @@ def create_layout():
         # =========================================================
         # VIEW TOGGLE
         # =========================================================
-        # Title row
         dbc.Row([
             dbc.Col([
                 html.H4(
@@ -114,7 +156,6 @@ def create_layout():
             ], md=12),
         ]),
 
-        # Buttons row
         dbc.Row([
             dbc.Col([
                 dbc.RadioItems(

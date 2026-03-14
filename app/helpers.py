@@ -37,7 +37,6 @@ DB_PATH = BASE_DIR / "rxnorm.sqlite"
 PRECOMPUTED_DIR = BASE_DIR / "assets" / "precomputed"
 
 
-
 # =========================================================
 # DATABASE
 # =========================================================
@@ -46,7 +45,18 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
 )
 
+
 def ensure_sqlite_indexes():
+    """
+    Create commonly used SQLite indexes if they do not already exist.
+
+    These indexes improve query performance for the most frequently accessed
+    RxNorm columns, especially lookups by product string, RXCUI identifiers,
+    term type (TTY), and RXNREL relationship joins.
+
+    Returns:
+        None
+    """
     stmts = [
         "CREATE INDEX IF NOT EXISTS idx_rxnconso_str ON RXNCONSO(STR);",
         "CREATE INDEX IF NOT EXISTS idx_rxnconso_rxcui ON RXNCONSO(RXCUI);",
@@ -62,6 +72,7 @@ def ensure_sqlite_indexes():
         for s in stmts:
             conn.execute(text(s))
 
+
 # =========================================================
 # PRECOMPUTED SAMPLE HELPERS
 # =========================================================
@@ -76,12 +87,38 @@ PRECOMPUTED_DRUGS = {
     },
 }
 
+
 def is_precomputed_sample(drug_id):
+    """
+    Check whether a given drug ID corresponds to a precomputed sample drug.
+
+    This is used to determine whether the application should load a saved,
+    pre-rendered visualization instead of computing one dynamically.
+
+    Args:
+        drug_id: RxNorm drug identifier or any value convertible to string.
+
+    Returns:
+        bool: True if the drug ID exists in PRECOMPUTED_DRUGS, otherwise False.
+    """
     if not drug_id:
         return False
     return str(drug_id).strip() in PRECOMPUTED_DRUGS
 
+
 def get_precomputed_html(drug_id):
+    """
+    Load the saved HTML visualization for a precomputed sample drug.
+
+    If the given drug ID exists in PRECOMPUTED_DRUGS and its corresponding HTML
+    file is present on disk, the file contents are returned as a string.
+
+    Args:
+        drug_id: RxNorm drug identifier or any value convertible to string.
+
+    Returns:
+        str | None: HTML string if the file exists, otherwise None.
+    """
     if not drug_id:
         return None
 
@@ -98,10 +135,26 @@ def get_precomputed_html(drug_id):
 
     print(f"DEBUG missing precomputed file: {html_path}")
     return None
+
+
 # =========================================================
 # SEARCH HELPERS
 # =========================================================
 def extract_name(df):
+    """
+    Extract a simplified product name from the RxNorm STR column.
+
+    This function looks for text enclosed in square brackets inside STR and
+    treats that as the display-friendly product name. If no bracketed value
+    exists, the name is set to 'Generic'. Duplicate product names are removed.
+
+    Args:
+        df (pd.DataFrame): DataFrame expected to contain an STR column.
+
+    Returns:
+        pd.DataFrame: Copy of the input DataFrame with a Product_Name column
+        added and duplicate Product_Name rows removed.
+    """
     if df.empty:
         return df
     df = df.copy()
@@ -111,7 +164,20 @@ def extract_name(df):
     df = df.drop_duplicates(subset=["Product_Name"])
     return df
 
+
 def Searchbar(term):
+    """
+    Perform a broad product search against RxNorm branded drug products.
+
+    The search uses a SQL LIKE match on RXNCONSO.STR for entries with TTY='DP',
+    then standardizes the result using extract_name().
+
+    Args:
+        term (str): User-entered search string.
+
+    Returns:
+        pd.DataFrame: Matching product rows with RXCUI, STR, and Product_Name.
+    """
     sql = text("""
         SELECT RXCUI, STR
         FROM RXNCONSO
@@ -122,7 +188,23 @@ def Searchbar(term):
         df = pd.read_sql(sql, conn, params={"term": f"%{term}%"})
     return extract_name(df)
 
+
 def Searchbar_exact_product(term):
+    """
+    Find the best matching exact product for a search term.
+
+    The function first searches branded drug products (TTY='DP') with a
+    case-insensitive partial match. It then tries to find an exact
+    Product_Name match after extraction. If none is found, it returns the
+    first available result.
+
+    Args:
+        term (str): User-entered product name.
+
+    Returns:
+        dict | None: Dictionary with keys {'id', 'name'} for the best match,
+        or None if no matches are found.
+    """
     sql = text("""
         SELECT RXCUI, STR
         FROM RXNCONSO
@@ -150,10 +232,27 @@ def Searchbar_exact_product(term):
     row = df.iloc[0]
     return {"id": str(row["RXCUI"]), "name": row["Product_Name"]}
 
+
 # =========================================================
 # RXNORM DATA HELPERS
 # =========================================================
 def Exact_drugs(Ing_lst, ID):
+    """
+    Retrieve branded drug products containing all selected ingredients.
+
+    This function identifies DP products related to every ingredient in
+    Ing_lst. It keeps only products whose full ingredient set matches the
+    target combination exactly, based on distinct ingredient membership.
+
+    Args:
+        Ing_lst (list[str]): List of ingredient RXCUI values.
+        ID (str | int): Selected drug ID, currently unused in the query logic
+            but preserved for interface consistency.
+
+    Returns:
+        pd.DataFrame: DataFrame with columns including ID, DP, and Product_Name
+        for products matching the full ingredient combination.
+    """
     s = ""
     for i, j in enumerate(Ing_lst):
         if i == (len(Ing_lst) - 1):
@@ -201,7 +300,23 @@ def Exact_drugs(Ing_lst, ID):
     res = res.loc[keep_mask].reset_index(drop=True)
     return res
 
+
 def Union_Drugs(Ing_lst, ID):
+    """
+    Retrieve branded drug products containing only a subset of ingredients.
+
+    This function finds DP products related to at least one ingredient in
+    Ing_lst, but with fewer total matching ingredients than the full target
+    combination. The selected drug itself is excluded.
+
+    Args:
+        Ing_lst (list[str]): List of ingredient RXCUI values.
+        ID (str | int): Selected drug ID to exclude from results.
+
+    Returns:
+        pd.DataFrame: DataFrame with columns including ID, DP, and Product_Name
+        for partially overlapping products.
+    """
     s = ""
     for i, j in enumerate(Ing_lst):
         if i == (len(Ing_lst) - 1):
@@ -247,7 +362,17 @@ def Union_Drugs(Ing_lst, ID):
     res = res.drop_duplicates(subset="ID", keep="first").reset_index(drop=True)
     return res
 
+
 def Ing_count(ID):
+    """
+    Count the number of distinct SCDC ingredient concepts linked to a drug.
+
+    Args:
+        ID (str | int): Drug RXCUI identifier.
+
+    Returns:
+        int: Number of linked SCDC entries.
+    """
     query = f"""
         SELECT count(c.STR) as Count
         FROM RXNCONSO c
@@ -259,7 +384,20 @@ def Ing_count(ID):
     df = pd.read_sql(query, engine)
     return int(df["Count"][0])
 
+
 def Ing_count_bulk(ids):
+    """
+    Count linked SCDC ingredient concepts for multiple drug IDs at once.
+
+    This bulk version avoids repeated individual database calls by grouping
+    results in a single query.
+
+    Args:
+        ids (list[str | int]): Collection of drug RXCUI identifiers.
+
+    Returns:
+        dict[str, int]: Mapping from drug ID to distinct SCDC count.
+    """
     if not ids:
         return {}
 
@@ -279,7 +417,23 @@ def Ing_count_bulk(ids):
     df = pd.read_sql(sql, engine, params=params)
     return dict(zip(df["ID"].astype(str), df["Count"].astype(int)))
 
+
 def Fetch_Matches(exact_df, union_df, ID):
+    """
+    Split exact-match products into true exact matches and partial matches.
+
+    The target product's SCDC count is used as the reference. Any rows in
+    exact_df whose ingredient count differs from the selected drug are moved
+    into union_df.
+
+    Args:
+        exact_df (pd.DataFrame): Candidate exact-match products.
+        union_df (pd.DataFrame): Candidate partial-match products.
+        ID (str | int): Selected drug RXCUI identifier.
+
+    Returns:
+        tuple[pd.DataFrame, pd.DataFrame]: Updated (exact_df, union_df).
+    """
     target_count = Ing_count(ID)
 
     unique_ids = exact_df["ID"].dropna().astype(str).unique().tolist()
@@ -292,7 +446,24 @@ def Fetch_Matches(exact_df, union_df, ID):
 
     return exact_df, union_df
 
+
 def Fetch_Ingredients(ID):
+    """
+    Retrieve and parse ingredient names and concentrations for a drug.
+
+    Ingredients are fetched from SCDC concepts linked through RXNREL. The
+    function attempts to parse values of the form '<ingredient> <amount> MG'
+    and extracts both the ingredient name and numeric concentration.
+
+    Args:
+        ID (str | int): Drug RXCUI identifier.
+
+    Returns:
+        pd.DataFrame: DataFrame with columns:
+            - Ingredient_ID
+            - Ingredient
+            - Concentration
+    """
     query = text("""
         SELECT r.RXCUI2 as Ingredient_ID, c.STR as Full_Ingredient
         FROM RXNCONSO c
@@ -327,6 +498,19 @@ def Fetch_Ingredients(ID):
 
 
 def Fetch_Dose_Form(ID):
+    """
+    Retrieve the dose form label associated with a drug.
+
+    The dose form is inferred from a related RXNCONSO string where the RXNREL
+    relationship type is 'consists_of'. A readable title-cased label is
+    extracted from the portion before any bracketed product text.
+
+    Args:
+        ID (str | int): Drug RXCUI identifier.
+
+    Returns:
+        str: Dose form name if found, otherwise 'Not specified'.
+    """
     query = text("""
         SELECT c.STR
         FROM RXNCONSO c
@@ -347,8 +531,19 @@ def Fetch_Dose_Form(ID):
     return "Not specified"
 
 
-
 def Fetch_Generic_Name(ID):
+    """
+    Retrieve a generic or standardized RxNorm name for a drug.
+
+    The lookup searches linked concepts with common semantic clinical term
+    types, returning the first matching STR.
+
+    Args:
+        ID (str | int): Drug RXCUI identifier.
+
+    Returns:
+        str: Generic or standardized name, or 'N/A' if unavailable.
+    """
     query = text("""
         SELECT c.STR
         FROM RXNCONSO c
@@ -360,7 +555,30 @@ def Fetch_Generic_Name(ID):
         res = pd.read_sql(query, conn, params={"id": ID})
     return res["STR"].iloc[0] if not res.empty else "N/A"
 
+
 def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
+    """
+    Build a wide heatmap-ready DataFrame of ingredient concentrations by product.
+
+    The selected drug is added to the incoming comparison DataFrame, related
+    ingredients are fetched from the database, concentrations are parsed, and
+    the result is pivoted into wide format with one row per product and one
+    column per ingredient.
+
+    Args:
+        df (pd.DataFrame): Comparison products containing at least ID and
+            Product_Name columns.
+        drug_of_interest_id (str | int): Selected drug RXCUI identifier.
+        drug_of_interest_name (str): Display name of the selected drug.
+
+    Returns:
+        pd.DataFrame: Wide-format DataFrame containing:
+            - Product_Name
+            - ingredient concentration columns
+            - Ingredients_List
+            - ID
+            - Dose_Form
+    """
     searched_row = pd.DataFrame({
         "ID": [str(drug_of_interest_id)],
         "Product_Name": [drug_of_interest_name]
@@ -402,6 +620,15 @@ def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
     long_df["ID"] = long_df["ID"].astype(str)
 
     def parse_name_and_mg(full_str):
+        """
+        Parse an ingredient label into name and MG concentration.
+
+        Args:
+            full_str (str): Raw ingredient label from RXNCONSO.
+
+        Returns:
+            tuple[str, float]: Parsed ingredient name and concentration.
+        """
         full_str = str(full_str)
         match = re.search(r"(.+?)\s+(\d+(?:\.\d+)?)\s+MG\b", full_str, re.IGNORECASE)
         if match:
@@ -447,10 +674,28 @@ def Fetch_Heatmap(df, drug_of_interest_id, drug_of_interest_name):
     heatmap_df['Dose_Form'] = heatmap_df['ID'].apply(Fetch_Dose_Form)
     return heatmap_df
 
+
 # =========================================================
 # BAR CHARTS
 # =========================================================
 def Create_Ingredient_Combination_Frequency_Bar(heatmap_df):
+    """
+    Create a bar chart showing frequency of unique ingredient combinations.
+
+    Each product row is converted to a binary presence/absence pattern across
+    ingredient columns, then grouped into combination labels such as
+    'Acetaminophen + Caffeine'.
+
+    Args:
+        heatmap_df (pd.DataFrame): Wide-format heatmap data with ingredient
+            columns and metadata columns.
+
+    Returns:
+        alt.Chart: Altair bar chart of ingredient-combination frequencies.
+
+    Raises:
+        ValueError: If no ingredient columns are found.
+    """
     ignore_cols = {"Product_Name", "Ingredients_List", "ID", "Dose_Form"}
     ingredient_cols = [c for c in heatmap_df.columns if c not in ignore_cols]
 
@@ -483,7 +728,21 @@ def Create_Ingredient_Combination_Frequency_Bar(heatmap_df):
 
     return chart
 
+
 def Create_Ingredient_Frequency_Bar(heatmap_df):
+    """
+    Create a bar chart showing how many products contain each ingredient.
+
+    Ingredient columns are converted into binary presence/absence indicators,
+    and the number of products containing each ingredient is summed.
+
+    Args:
+        heatmap_df (pd.DataFrame): Wide-format heatmap data with ingredient
+            columns and metadata columns.
+
+    Returns:
+        alt.Chart: Altair bar chart of ingredient frequencies.
+    """
     ignore_cols = {"Product_Name", "Ingredients_List", "ID", "Dose_Form"}
     ingredient_cols = [c for c in heatmap_df.columns if c not in ignore_cols]
 
@@ -509,6 +768,7 @@ def Create_Ingredient_Frequency_Bar(heatmap_df):
 
     return chart
 
+
 # =========================================================
 # LINKED UMAP + HEATMAP
 # =========================================================
@@ -520,6 +780,39 @@ def Create_Linked_UMAP_Heatmap(
     doseform_weight=2.0,
     jitter_strength=0.15
 ):
+    """
+    Create a linked UMAP scatter plot and ingredient heatmap visualization.
+
+    The selected drug is highlighted in the UMAP embedding, and the heatmap
+    shows either:
+    1. a default subset consisting of the selected product plus the top related
+       products, or
+    2. a brushed subset based on interactive selection in the UMAP panel.
+
+    The feature matrix combines ingredient concentrations and one-hot encoded
+    dose form information before dimensionality reduction.
+
+    Args:
+        heatmap_df (pd.DataFrame): Wide-format product-by-ingredient matrix.
+        drug_of_interest (str | int): Identifier or name used to select the
+            focal product.
+        match_by (str, optional): Column used for selection matching, typically
+            'ID'. Defaults to "ID".
+        max_related (int, optional): Number of related products shown in the
+            default heatmap view. Defaults to 10.
+        doseform_weight (float, optional): Relative weight applied to dose form
+            encoded features in the UMAP input matrix. Defaults to 2.0.
+        jitter_strength (float, optional): Magnitude of random jitter added to
+            UMAP coordinates for visual separation. Defaults to 0.15.
+
+    Returns:
+        alt.Chart: Horizontally concatenated Altair chart containing the UMAP
+        scatter plot and linked heatmap, or a message chart if the input is
+        empty or invalid.
+
+    Raises:
+        ValueError: If heatmap_df is None.
+    """
     if heatmap_df is None:
         raise ValueError("heatmap_df is None")
 
