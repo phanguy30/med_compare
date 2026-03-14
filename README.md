@@ -18,6 +18,8 @@ The app focuses on formulation transparency and structural comparison through co
 The Dashboard has been deployed in Render to make our Med-Compare project accessible to everyone.
 Feel free to view our deployed version on [Render](https://med-compare1.onrender.com/)
 
+**NOTE:** Due to memory limitation on render, only samples drugs are available, the search function does not work (triggers behind the scenese calculations) and will CRASH the website
+
 ## High-Level Interface Design
 
 The interface begins with a search bar and a Quick Sample with selective Drugs. The Search bar can be used to enter a brand name, generic name, or active ingredient. The system normalizes the input to a standardized RxNorm identity and retrieves associated ingredient and formulation information.
